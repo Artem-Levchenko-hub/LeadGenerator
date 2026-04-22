@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Лиды · Stenvik{% endblock %}
+{% block content %}
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-body">
+    <form class="row g-2 align-items-end" method="get">
+      <div class="col-md-3">
+        <label class="form-label small">Поиск по названию</label>
+        <input type="text" class="form-control" name="q" value="{{ q or '' }}" placeholder="Название компании">
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small">Приоритет</label>
+        <select class="form-select" name="priority">
+          <option value="">Любой</option>
+          <option value="5" {% if priority == 5 %}selected{% endif %}>⭐⭐⭐⭐⭐ Горячие</option>
+          <option value="4" {% if priority == 4 %}selected{% endif %}>⭐⭐⭐⭐ Тёплые</option>
+          <option value="3" {% if priority == 3 %}selected{% endif %}>⭐⭐⭐ Средние</option>
+          <option value="2" {% if priority == 2 %}selected{% endif %}>⭐⭐ Слабые</option>
+          <option value="1" {% if priority == 1 %}selected{% endif %}>⭐ Не наш</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small">Статус</label>
+        <select class="form-select" name="status_filter">
+          <option value="">Любой</option>
+          {% for s, label in status_labels.items() %}
+          <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small">Город</label>
+        <select class="form-select" name="city">
+          <option value="">Любой</option>
+          {% for c in cities %}
+          <option value="{{ c }}" {% if city == c %}selected{% endif %}>{{ c }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <button class="btn btn-primary">Фильтровать</button>
+        <a href="/leads" class="btn btn-outline-secondary">Сброс</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>★</th>
+          <th>Компания</th>
+          <th>Индустрия</th>
+          <th>Город</th>
+          <th>Сайт</th>
+          <th>Боли / услуги</th>
+          <th>Статус</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for lead in leads %}
+        <tr>
+          <td>
+            {% set p = lead.ai_priority or 0 %}
+            {% set label, color = priority_labels.get(p, ('?', 'light')) %}
+            <span class="badge bg-{{ color }}">{{ '⭐' * p if p > 0 else '?' }}</span>
+          </td>
+          <td>
+            <strong>{{ lead.company_name }}</strong>
+            {% if lead.ai_summary %}<br><small class="text-muted">{{ lead.ai_summary[:120] }}</small>{% endif %}
+          </td>
+          <td><small>{{ lead.industry or '—' }}</small></td>
+          <td><small>{{ lead.city or '—' }}</small></td>
+          <td>
+            {% if lead.website_status == 'no_site' %}
+              <span class="badge bg-danger">нет сайта</span>
+            {% elif lead.website_status == 'cms_site' %}
+              <span class="badge bg-warning text-dark">старый CMS</span>
+            {% elif lead.website_status == 'constructor_site' %}
+              <span class="badge bg-info text-dark">конструктор</span>
+            {% elif lead.website_status == 'no_https' %}
+              <span class="badge bg-warning text-dark">нет HTTPS</span>
+            {% elif lead.website_status == 'dead_site' %}
+              <span class="badge bg-secondary">не открывается</span>
+            {% elif lead.website_status == 'has_site' %}
+              <span class="badge bg-success">есть</span>
+            {% else %}—{% endif %}
+            {% if lead.website_url %}
+              <br><a href="{{ lead.website_url }}" target="_blank" class="small text-muted">{{ lead.website_url[:30] }}…</a>
+            {% endif %}
+          </td>
+          <td>
+            {% if lead.ai_pains %}
+              <small><strong>Боль:</strong> {{ lead.ai_pains[0][:80] }}</small><br>
+            {% endif %}
+            {% if lead.ai_recommended_services %}
+              <small class="text-primary">{{ lead.ai_recommended_services | join(', ') }}</small>
+            {% endif %}
+          </td>
+          <td>
+            <span class="badge bg-light text-dark">{{ status_labels.get(lead.status, lead.status) }}</span>
+            {% if lead.assigned_to %}<br><small class="text-muted">→ {{ lead.assigned_to }}</small>{% endif %}
+          </td>
+          <td><a href="/leads/{{ lead.id }}" class="btn btn-sm btn-outline-dark">Открыть</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="text-center text-muted py-4">Лидов не найдено</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="d-flex justify-content-between mt-3">
+  <div></div>
+  <nav>
+    <ul class="pagination">
+      {% if page > 1 %}
+      <li class="page-item"><a class="page-link" href="?page={{ page - 1 }}&priority={{ priority or '' }}&status_filter={{ status_filter or '' }}&city={{ city or '' }}&q={{ q or '' }}">« Пред</a></li>
+      {% endif %}
+      <li class="page-item active"><span class="page-link">{{ page }}</span></li>
+      {% if leads|length >= 50 %}
+      <li class="page-item"><a class="page-link" href="?page={{ page + 1 }}&priority={{ priority or '' }}&status_filter={{ status_filter or '' }}&city={{ city or '' }}&q={{ q or '' }}">След »</a></li>
+      {% endif %}
+    </ul>
+  </nav>
+</div>
+{% endblock %}

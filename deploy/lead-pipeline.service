@@ -1,0 +1,32 @@
+[Unit]
+Description=Stenvik Lead Pipeline (FastAPI + scheduler)
+After=network.target
+
+[Service]
+Type=simple
+User=stenvik
+Group=stenvik
+WorkingDirectory=/opt/lead_pipeline
+EnvironmentFile=/opt/lead_pipeline/.env
+ExecStart=/opt/lead_pipeline/.venv/bin/gunicorn \
+    --workers 1 \
+    --worker-class uvicorn.workers.UvicornWorker \
+    --bind 127.0.0.1:8000 \
+    --access-logfile /var/log/lead_pipeline/access.log \
+    --error-logfile /var/log/lead_pipeline/error.log \
+    --timeout 120 \
+    app.main:app
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/lead_pipeline/data /var/log/lead_pipeline
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}{{ lead.company_name }} · Stenvik Leads{% endblock %}
+{% block content %}
+<div class="mb-3"><a href="/leads" class="btn btn-sm btn-outline-secondary">← К списку</a></div>
+
+<div class="row">
+  <div class="col-lg-8">
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <h2 class="mb-0">{{ lead.company_name }}</h2>
+          {% set p = lead.ai_priority or 0 %}
+          {% set label, color = priority_labels.get(p, ('?', 'light')) %}
+          <span class="badge bg-{{ color }} fs-6">{{ '⭐' * p if p > 0 else '?' }} {{ label }}</span>
+        </div>
+        <div class="text-muted mb-3">
+          {{ lead.industry or '—' }} · {{ lead.city or '—' }}
+        </div>
+
+        {% if lead.ai_summary %}
+        <div class="mb-3">
+          <div class="text-muted small mb-1">💼 КРАТКО</div>
+          <p>{{ lead.ai_summary }}</p>
+        </div>
+        {% endif %}
+
+        {% if lead.ai_pains %}
+        <div class="mb-3">
+          <div class="text-muted small mb-2">🔥 БОЛИ</div>
+          <ul>
+          {% for pain in lead.ai_pains %}
+            <li>{{ pain }}</li>
+          {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+
+        {% if lead.ai_recommended_services %}
+        <div class="mb-3">
+          <div class="text-muted small mb-2">🛠️ РЕКОМЕНДОВАННЫЕ УСЛУГИ STENVIK</div>
+          {% for s in lead.ai_recommended_services %}
+            <span class="badge bg-primary me-1">{{ s }}</span>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if lead.ai_hook %}
+        <div class="mb-3 p-3 bg-light rounded border-start border-4 border-success">
+          <div class="text-muted small mb-1">💬 ХУК ДЛЯ ПЕРВОГО КОНТАКТА</div>
+          <p class="mb-0 fst-italic">{{ lead.ai_hook }}</p>
+        </div>
+        {% endif %}
+
+        {% if lead.ai_priority_reason %}
+        <div class="mb-3">
+          <div class="text-muted small mb-1">📊 ПОЧЕМУ ТАКОЙ ПРИОРИТЕТ</div>
+          <p class="small">{{ lead.ai_priority_reason }}</p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body">
+        <h5>🌐 Сайт</h5>
+        <p>
+          <strong>Статус:</strong>
+          {% if lead.website_status == 'no_site' %}
+            <span class="badge bg-danger">нет сайта вообще</span>
+          {% elif lead.website_status == 'cms_site' %}
+            <span class="badge bg-warning text-dark">старый CMS</span>
+          {% elif lead.website_status == 'constructor_site' %}
+            <span class="badge bg-info text-dark">сайт на конструкторе</span>
+          {% elif lead.website_status == 'no_https' %}
+            <span class="badge bg-warning text-dark">нет HTTPS</span>
+          {% elif lead.website_status == 'dead_site' %}
+            <span class="badge bg-secondary">сайт не открывается</span>
+          {% elif lead.website_status == 'has_site' %}
+            <span class="badge bg-success">есть</span>
+          {% else %}{{ lead.website_status }}{% endif %}
+        </p>
+        {% if lead.website_url %}
+        <p><a href="{{ lead.website_url }}" target="_blank">{{ lead.website_url }}</a></p>
+        {% endif %}
+        {% if lead.website_text_excerpt %}
+        <details>
+          <summary class="small text-muted">Фрагмент текста с сайта</summary>
+          <pre class="small mt-2 p-2 bg-light rounded" style="white-space: pre-wrap">{{ lead.website_text_excerpt[:1500] }}</pre>
+        </details>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if lead.description_hh %}
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-body">
+        <h5>📋 Описание с HH.ru</h5>
+        <p class="small">{{ lead.description_hh[:1500] }}{% if lead.description_hh|length > 1500 %}…{% endif %}</p>
+        <a href="https://hh.ru/employer/{{ lead.hh_employer_id }}" target="_blank" class="btn btn-sm btn-outline-secondary">Открыть на HH</a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-white"><strong>CRM</strong></div>
+      <form method="post" action="/leads/{{ lead.id }}/update">
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label">Статус</label>
+            <select class="form-select" name="status_value">
+              {% for s, label in status_labels.items() %}
+              <option value="{{ s }}" {% if lead.status == s %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Назначен</label>
+            <input type="text" class="form-control" name="assigned_to" value="{{ lead.assigned_to or '' }}" placeholder="Имя продажника">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Заметки</label>
+            <textarea class="form-control" name="notes" rows="4" placeholder="Что обсуждали, когда перезвонить…">{{ lead.notes or '' }}</textarea>
+          </div>
+          <button class="btn btn-primary w-100">Сохранить</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+      <div class="card-body small">
+        <div class="text-muted">HH ID: {{ lead.hh_employer_id }}</div>
+        <div class="text-muted">Добавлен: {{ lead.created_at.strftime('%d.%m.%Y %H:%M') if lead.created_at else '—' }}</div>
+        <div class="text-muted">Обновлён: {{ lead.updated_at.strftime('%d.%m.%Y %H:%M') if lead.updated_at else '—' }}</div>
+        {% if lead.ai_analyzed_at %}
+        <div class="text-muted">AI анализ: {{ lead.ai_analyzed_at.strftime('%d.%m.%Y %H:%M') }}</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
