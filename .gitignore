@@ -12,3 +12,4 @@ env/
 *.log
 data/*.db
 data/*.db-journal
+batch.json
