@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Пользователи — Stenvik Admin{% endblock %}
+
+{% block content %}
+<div class="admin-page">
+  <div class="admin-header">
+    <h1 class="admin-title">Пользователи</h1>
+    <nav class="admin-subnav">
+      <a href="/admin/users" class="active">Юзеры</a>
+      <a href="/admin/stats">Статистика</a>
+      <a href="/admin/activity">Активность</a>
+    </nav>
+  </div>
+
+  <!-- Форма создания -->
+  <section class="admin-card">
+    <h2 class="section-title">Создать пользователя</h2>
+    {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+    <form method="post" action="/admin/users" class="create-user-form"
+          hx-post="/admin/users" hx-target="#users-table-wrap" hx-swap="innerHTML">
+      <input type="text" name="username" placeholder="Логин" required minlength="3" maxlength="32"
+             value="{{ form_username or '' }}" pattern="[A-Za-z0-9._\-]+">
+      <input type="password" name="password" placeholder="Пароль (8+ символов)" required minlength="8">
+      <select name="role">
+        <option value="sales"{% if form_role != 'admin' %} selected{% endif %}>Продажник (sales)</option>
+        <option value="admin"{% if form_role == 'admin' %} selected{% endif %}>Админ</option>
+      </select>
+      <button type="submit" class="btn-primary">Создать</button>
+    </form>
+  </section>
+
+  <!-- Таблица -->
+  <section class="admin-card">
+    <h2 class="section-title">Все пользователи ({{ users|length }})</h2>
+    <div id="users-table-wrap">
+      {% include 'admin/_users_table.html' %}
+    </div>
+  </section>
+</div>
+{% endblock %}

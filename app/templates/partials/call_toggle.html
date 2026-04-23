@@ -1,0 +1,19 @@
+<button
+  type="button"
+  id="call-toggle"
+  class="call-btn{% if lead.called %} called{% endif %}"
+  hx-patch="/api/leads/{{ lead.id }}/called"
+  hx-swap="outerHTML"
+  hx-trigger="click"
+>
+  {% if lead.called %}
+  <span class="call-mark"><i data-lucide="check"></i></span>
+  <span class="call-label">Звонок сделан</span>
+  {% if lead.called_at %}
+  <span class="call-when">{{ lead.called_at.strftime('%d.%m %H:%M') }}</span>
+  {% endif %}
+  {% else %}
+  <span class="call-mark"></span>
+  <span class="call-label">Отметить как «позвонил»</span>
+  {% endif %}
+</button>

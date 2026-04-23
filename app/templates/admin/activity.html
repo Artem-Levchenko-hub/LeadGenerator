@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Активность — Stenvik Admin{% endblock %}
+
+{% block content %}
+<div class="admin-page">
+  <div class="admin-header">
+    <h1 class="admin-title">Активность</h1>
+    <nav class="admin-subnav">
+      <a href="/admin/users">Юзеры</a>
+      <a href="/admin/stats">Статистика</a>
+      <a href="/admin/activity" class="active">Активность</a>
+    </nav>
+  </div>
+
+  <section class="admin-card">
+    <h2 class="section-title">Последние 200 событий</h2>
+
+    {% if not rows %}
+    <p class="text-muted">Активность пуста. Покажется здесь как только кто-то что-то сделает.</p>
+    {% else %}
+    <div class="activity-list">
+      {% for entry, username in rows %}
+      <div class="activity-row">
+        <div class="activity-time">
+          {{ entry.created_at.strftime('%d.%m %H:%M:%S') }}
+        </div>
+        <div class="activity-user">
+          {% if username %}<strong>{{ username }}</strong>{% else %}<em>system</em>{% endif %}
+        </div>
+        <div class="activity-action">
+          {% set icon = {
+            'register': 'user-plus',
+            'login': 'log-in',
+            'login_failed': 'x-octagon',
+            'logout': 'log-out',
+            'lead_called': 'check',
+            'lead_uncalled': 'rotate-ccw',
+            'lead_status_changed': 'arrow-left-right',
+            'lead_feedback_changed': 'pencil',
+            'lead_assigned': 'user-check',
+            'user_created': 'user-plus',
+            'user_role_changed': 'settings',
+            'user_activated': 'play',
+            'user_deactivated': 'pause',
+          }.get(entry.action, 'circle-dot') %}
+          <span class="activity-icon"><i data-lucide="{{ icon }}"></i></span>
+          <span class="activity-label">{{ entry.action }}</span>
+          {% if entry.lead_id and entry.lead_id in leads_map %}
+            <a href="/lead/{{ entry.lead_id }}" class="activity-lead">{{ leads_map[entry.lead_id] }}</a>
+          {% endif %}
+          {% if entry.meta %}
+            <span class="activity-meta">
+              {% for k, v in entry.meta.items() %}
+                <span class="meta-kv">{{ k }}: <code>{{ v }}</code></span>
+              {% endfor %}
+            </span>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Статистика — Stenvik Admin{% endblock %}
+
+{% block content %}
+<div class="admin-page">
+  <div class="admin-header">
+    <h1 class="admin-title">Статистика</h1>
+    <nav class="admin-subnav">
+      <a href="/admin/users">Юзеры</a>
+      <a href="/admin/stats" class="active">Статистика</a>
+      <a href="/admin/activity">Активность</a>
+    </nav>
+  </div>
+
+  <!-- KPI -->
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-value num">{{ total_leads }}</div>
+      <div class="kpi-label">Всего лидов</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value num">{{ called_total }}</div>
+      <div class="kpi-label">Обработано звонками</div>
+      <div class="kpi-ratio num">{{ (called_total * 100 // total_leads) if total_leads else 0 }}% от всех</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value num">{{ called_day }}</div>
+      <div class="kpi-label">За сутки</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value num">{{ called_week }}</div>
+      <div class="kpi-label">За неделю</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value num">{{ called_month }}</div>
+      <div class="kpi-label">За месяц</div>
+    </div>
+  </div>
+
+  <!-- Воронка -->
+  <section class="admin-card">
+    <h2 class="section-title">Воронка статусов</h2>
+    <div class="funnel">
+      {% for code in DEAL_STATUS_ORDER %}
+        {% set count = funnel.get(code, 0) %}
+        {% set pct = (count * 100 // total_leads) if total_leads else 0 %}
+        <div class="funnel-row">
+          <div class="funnel-label">{{ DEAL_STATUS_LABELS[code] }}</div>
+          <div class="funnel-bar-wrap">
+            <div class="funnel-bar funnel-{{ code }}" style="width: {{ pct }}%;"></div>
+            <span class="funnel-count num">{{ count }}</span>
+          </div>
+          <div class="funnel-pct num">{{ pct }}%</div>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <!-- По приоритетам -->
+  <section class="admin-card">
+    <h2 class="section-title">По приоритетам</h2>
+    <div class="prio-stats">
+      {% for p in [5, 4, 3, 2, 1] %}
+      <div class="prio-stat">
+        <span class="prio-pill">
+          {% if p >= 5 %}<span class="dot p5"></span>
+          {% elif p == 4 %}<span class="dot p4"></span>
+          {% elif p == 3 %}<span class="dot p3"></span>
+          {% else %}<span class="dot p2"></span>{% endif %}
+          <span>P{{ p }}</span>
+        </span>
+        <span class="prio-count num">{{ by_priority.get(p, 0) }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <!-- По продажникам -->
+  <section class="admin-card">
+    <h2 class="section-title">Активность продажников</h2>
+    {% if by_sales %}
+    <div class="sales-list">
+      {% for row in by_sales %}
+      <div class="sales-row">
+        <div class="sales-name">
+          <span>{{ row.username }}</span>
+          <span class="role-tag {{ row.role }}">{{ 'ADMIN' if row.role == 'admin' else 'SALES' }}</span>
+        </div>
+        <div class="sales-bar-wrap">
+          {% set max_calls = by_sales[0].calls %}
+          {% set pct = (row.calls * 100 // max_calls) if max_calls else 0 %}
+          <div class="sales-bar" style="width: {{ pct }}%;"></div>
+        </div>
+        <div class="sales-count"><span class="num">{{ row.calls }}</span> звонков</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-muted">Пока никто не делал звонков.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

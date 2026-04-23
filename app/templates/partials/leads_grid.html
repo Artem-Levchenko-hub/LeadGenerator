@@ -1,0 +1,67 @@
+{% if leads %}
+<div class="grid">
+  {% for lead in leads %}
+  {% set p = lead.priority or 0 %}
+  {% set age_hours = lead.age_hours|default(0) %}
+  {% set is_hot_waiting = (p >= 4 and not lead.called and age_hours > 6) %}
+  {%- set flag = {
+    'RU': '🇷🇺','US': '🇺🇸','KZ': '🇰🇿','BY': '🇧🇾','UA': '🇺🇦',
+    'DE': '🇩🇪','GB': '🇬🇧','UK': '🇬🇧','AE': '🇦🇪','TR': '🇹🇷',
+    'AM': '🇦🇲','GE': '🇬🇪','UZ': '🇺🇿','KG': '🇰🇬','AZ': '🇦🇿',
+    'CN': '🇨🇳','IN': '🇮🇳','PL': '🇵🇱','FR': '🇫🇷','ES': '🇪🇸',
+    'IT': '🇮🇹','NL': '🇳🇱','SE': '🇸🇪','CA': '🇨🇦','AU': '🇦🇺',
+    'CY': '🇨🇾','IL': '🇮🇱','RS': '🇷🇸',
+  } -%}
+  <a class="card priority-{{ p }}{% if lead.called %} card-called{% endif %}{% if is_hot_waiting %} card-hot-waiting{% endif %}"
+     href="/lead/{{ lead.id }}">
+    <div class="card-row-top">
+      <span class="prio-pill">
+        {% if p >= 5 %}<span class="dot p5"></span>
+        {% elif p == 4 %}<span class="dot p4"></span>
+        {% elif p == 3 %}<span class="dot p3"></span>
+        {% else %}<span class="dot p2"></span>{% endif %}
+        <span>P{{ p }}</span>
+      </span>
+      {% if lead.deal_status and lead.deal_status not in ('new', 'in_work') %}
+      <span class="status-pill status-{{ lead.deal_status }}">
+        {{ DEAL_STATUS_LABELS.get(lead.deal_status, lead.deal_status) }}
+      </span>
+      {% endif %}
+      <span class="row-spacer"></span>
+      {% if lead.called %}
+      <span class="called-mark" title="Позвонили{% if lead.called_at %} · {{ lead.called_at.strftime('%d.%m') }}{% endif %}">
+        <i data-lucide="check"></i>
+      </span>
+      {% elif is_hot_waiting %}
+      <span class="waiting-mark" title="Ждёт звонка · {{ lead.age_text }}">
+        <i data-lucide="alert-triangle"></i>
+      </span>
+      {% elif lead.age_text %}
+      <span class="age-mark">{{ lead.age_text }}</span>
+      {% endif %}
+    </div>
+    <h2 class="name">
+      {%- if lead.country and lead.country != 'RU' -%}
+        <span class="country-flag" title="{{ lead.country }}">{{ flag.get(lead.country, '🌍') }}</span>
+      {%- endif -%}
+      <span class="name-text">{{ lead.company_name }}</span>
+    </h2>
+    <div class="card-meta-line">
+      {%- set meta_parts = [] -%}
+      {%- if lead.city %}{% set _ = meta_parts.append(lead.city) %}{% endif -%}
+      {%- if lead.industry %}{% set _ = meta_parts.append(lead.industry) %}{% endif -%}
+      {%- if meta_parts -%}<span class="meta-loc">{{ meta_parts|join(' · ') }}</span>{%- endif -%}
+      {%- if lead.phone -%}<span class="meta-phone">{{ lead.phone }}</span>{%- endif -%}
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty">
+  {% if filter %}
+  <p>В этой категории пока пусто. <a href="/dashboard">Показать все</a></p>
+  {% else %}
+  <p>Пока нет лидов. Агент лидогенерации создаст их при следующем запуске.</p>
+  {% endif %}
+</div>
+{% endif %}

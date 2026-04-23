@@ -1,0 +1,42 @@
+<div class="user-row{% if not u.is_active %} user-inactive{% endif %}" id="user-{{ u.id }}">
+  <div class="user-name">
+    {{ u.username }}
+    {% if u.id == user.id %}<span class="you-badge">вы</span>{% endif %}
+  </div>
+  <div>
+    <span class="role-tag {{ u.role }}">{{ 'ADMIN' if u.role == 'admin' else 'SALES' }}</span>
+  </div>
+  <div>
+    {% if u.is_active %}
+    <span class="status-tag active"><span class="dot p3"></span>активен</span>
+    {% else %}
+    <span class="status-tag inactive"><span class="dot p2"></span>отключён</span>
+    {% endif %}
+  </div>
+  <div class="date-cell">{{ u.created_at.strftime('%d.%m.%Y') if u.created_at else '-' }}</div>
+  <div class="date-cell">
+    {{ u.last_login_at.strftime('%d.%m %H:%M') if u.last_login_at else '—' }}
+  </div>
+  <div class="users-actions">
+    {% if u.id != user.id %}
+    <button
+      type="button"
+      class="btn-xs"
+      hx-patch="/admin/users/{{ u.id }}/role"
+      hx-target="#user-{{ u.id }}"
+      hx-swap="outerHTML"
+      title="Переключить роль">
+      {% if u.role == 'admin' %}→ sales{% else %}→ admin{% endif %}
+    </button>
+    <button
+      type="button"
+      class="btn-xs btn-xs-danger"
+      hx-patch="/admin/users/{{ u.id }}/active"
+      hx-target="#user-{{ u.id }}"
+      hx-swap="outerHTML"
+      hx-confirm="{% if u.is_active %}Отключить {{ u.username }}?{% else %}Активировать {{ u.username }}?{% endif %}">
+      {% if u.is_active %}Отключить{% else %}Активировать{% endif %}
+    </button>
+    {% endif %}
+  </div>
+</div>

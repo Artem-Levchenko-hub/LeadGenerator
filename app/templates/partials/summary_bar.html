@@ -1,0 +1,9 @@
+<div class="summary-inner">
+  <span class="summary-kpi"><span class="dot p5"></span><span class="num">{{ counts_by_priority[5] }}</span><span>P5</span></span>
+  <span class="summary-kpi"><span class="dot p4"></span><span class="num">{{ counts_by_priority[4] }}</span><span>P4</span></span>
+  <span class="summary-kpi"><span class="dot p3"></span><span class="num">{{ counts_by_priority[3] }}</span><span>P3</span></span>
+  <span class="summary-kpi"><span class="dot p2"></span><span class="num">{{ counts_by_priority[2] + counts_by_priority[1] }}</span><span>P1–2</span></span>
+  <span class="summary-kpi"><span class="num">{{ total }}</span><span>Всего</span></span>
+  <span class="summary-kpi accent"><span class="num">{{ called_count }}</span><span>Обзвонено</span></span>
+  {% if hot_count %}<span class="summary-kpi hot"><span class="num">{{ hot_count }}</span><span>Ждут звонка</span></span>{% endif %}
+</div>

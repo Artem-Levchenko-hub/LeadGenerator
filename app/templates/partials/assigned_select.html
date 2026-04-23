@@ -1,0 +1,16 @@
+<div class="assigned-select-wrap{% if saved %} just-saved{% endif %}" id="assigned-select">
+  <select
+    name="assigned_to_id"
+    class="assigned-select"
+    hx-patch="/api/leads/{{ lead.id }}/assigned"
+    hx-swap="outerHTML"
+    hx-target="#assigned-select"
+    hx-trigger="change"
+  >
+    <option value="">— не назначено —</option>
+    {% for u in users %}
+    <option value="{{ u.id }}"{% if lead.assigned_to_id == u.id %} selected{% endif %}>{{ u.username }}</option>
+    {% endfor %}
+  </select>
+  {% if saved %}<span class="saved-tick">✓</span>{% endif %}
+</div>

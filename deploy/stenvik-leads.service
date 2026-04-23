@@ -1,0 +1,26 @@
+[Unit]
+Description=Stenvik Leads — веб-приложение для продажников
+After=network.target
+
+[Service]
+Type=notify
+User=__USER__
+Group=__USER__
+WorkingDirectory=__APP_DIR__
+Environment="PATH=__APP_DIR__/.venv/bin"
+EnvironmentFile=__APP_DIR__/.env
+ExecStart=__APP_DIR__/.venv/bin/gunicorn app.main:app -c __APP_DIR__/deploy/gunicorn.conf.py
+Restart=always
+RestartSec=5
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=false
+ReadWritePaths=__APP_DIR__/data __APP_DIR__/.venv
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

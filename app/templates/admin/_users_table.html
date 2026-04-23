@@ -1,0 +1,16 @@
+{% if flash %}<div class="alert alert-success">{{ flash }}</div>{% endif %}
+<div class="users-table">
+  <div class="users-thead">
+    <div>Логин</div>
+    <div>Роль</div>
+    <div>Статус</div>
+    <div>Создан</div>
+    <div>Последний вход</div>
+    <div class="users-actions-col">Действия</div>
+  </div>
+  <div id="users-rows">
+    {% for u in users %}
+      {% include 'admin/_user_row.html' %}
+    {% endfor %}
+  </div>
+</div>

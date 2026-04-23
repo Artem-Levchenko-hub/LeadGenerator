@@ -1,0 +1,15 @@
+<div class="status-select-wrap{% if saved %} just-saved{% endif %}" id="status-select">
+  <select
+    name="deal_status"
+    class="status-select status-{{ lead.deal_status }}"
+    hx-patch="/api/leads/{{ lead.id }}/status"
+    hx-swap="outerHTML"
+    hx-target="#status-select"
+    hx-trigger="change"
+  >
+    {% for code, label in DEAL_STATUS_LABELS.items() %}
+    <option value="{{ code }}"{% if lead.deal_status == code %} selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  {% if saved %}<span class="saved-tick">✓</span>{% endif %}
+</div>

@@ -1,143 +1,211 @@
 {% extends "base.html" %}
-{% block title %}{{ lead.company_name }} · Stenvik Leads{% endblock %}
+{% block title %}{{ lead.company_name }} — Stenvik Leads{% endblock %}
+
 {% block content %}
-<div class="mb-3"><a href="/leads" class="btn btn-sm btn-outline-secondary">← К списку</a></div>
-
-<div class="row">
-  <div class="col-lg-8">
-    <div class="card border-0 shadow-sm mb-3">
-      <div class="card-body">
-        <div class="d-flex justify-content-between align-items-start mb-2">
-          <h2 class="mb-0">{{ lead.company_name }}</h2>
-          {% set p = lead.ai_priority or 0 %}
-          {% set label, color = priority_labels.get(p, ('?', 'light')) %}
-          <span class="badge bg-{{ color }} fs-6">{{ '⭐' * p if p > 0 else '?' }} {{ label }}</span>
-        </div>
-        <div class="text-muted mb-3">
-          {{ lead.industry or '—' }} · {{ lead.city or '—' }}
-        </div>
-
-        {% if lead.ai_summary %}
-        <div class="mb-3">
-          <div class="text-muted small mb-1">💼 КРАТКО</div>
-          <p>{{ lead.ai_summary }}</p>
-        </div>
-        {% endif %}
-
-        {% if lead.ai_pains %}
-        <div class="mb-3">
-          <div class="text-muted small mb-2">🔥 БОЛИ</div>
-          <ul>
-          {% for pain in lead.ai_pains %}
-            <li>{{ pain }}</li>
-          {% endfor %}
-          </ul>
-        </div>
-        {% endif %}
-
-        {% if lead.ai_recommended_services %}
-        <div class="mb-3">
-          <div class="text-muted small mb-2">🛠️ РЕКОМЕНДОВАННЫЕ УСЛУГИ STENVIK</div>
-          {% for s in lead.ai_recommended_services %}
-            <span class="badge bg-primary me-1">{{ s }}</span>
-          {% endfor %}
-        </div>
-        {% endif %}
-
-        {% if lead.ai_hook %}
-        <div class="mb-3 p-3 bg-light rounded border-start border-4 border-success">
-          <div class="text-muted small mb-1">💬 ХУК ДЛЯ ПЕРВОГО КОНТАКТА</div>
-          <p class="mb-0 fst-italic">{{ lead.ai_hook }}</p>
-        </div>
-        {% endif %}
-
-        {% if lead.ai_priority_reason %}
-        <div class="mb-3">
-          <div class="text-muted small mb-1">📊 ПОЧЕМУ ТАКОЙ ПРИОРИТЕТ</div>
-          <p class="small">{{ lead.ai_priority_reason }}</p>
-        </div>
-        {% endif %}
-      </div>
-    </div>
-
-    <div class="card border-0 shadow-sm mb-3">
-      <div class="card-body">
-        <h5>🌐 Сайт</h5>
-        <p>
-          <strong>Статус:</strong>
-          {% if lead.website_status == 'no_site' %}
-            <span class="badge bg-danger">нет сайта вообще</span>
-          {% elif lead.website_status == 'cms_site' %}
-            <span class="badge bg-warning text-dark">старый CMS</span>
-          {% elif lead.website_status == 'constructor_site' %}
-            <span class="badge bg-info text-dark">сайт на конструкторе</span>
-          {% elif lead.website_status == 'no_https' %}
-            <span class="badge bg-warning text-dark">нет HTTPS</span>
-          {% elif lead.website_status == 'dead_site' %}
-            <span class="badge bg-secondary">сайт не открывается</span>
-          {% elif lead.website_status == 'has_site' %}
-            <span class="badge bg-success">есть</span>
-          {% else %}{{ lead.website_status }}{% endif %}
-        </p>
-        {% if lead.website_url %}
-        <p><a href="{{ lead.website_url }}" target="_blank">{{ lead.website_url }}</a></p>
-        {% endif %}
-        {% if lead.website_text_excerpt %}
-        <details>
-          <summary class="small text-muted">Фрагмент текста с сайта</summary>
-          <pre class="small mt-2 p-2 bg-light rounded" style="white-space: pre-wrap">{{ lead.website_text_excerpt[:1500] }}</pre>
-        </details>
-        {% endif %}
-      </div>
-    </div>
-
-    {% if lead.description_hh %}
-    <div class="card border-0 shadow-sm mb-3">
-      <div class="card-body">
-        <h5>📋 Описание с HH.ru</h5>
-        <p class="small">{{ lead.description_hh[:1500] }}{% if lead.description_hh|length > 1500 %}…{% endif %}</p>
-        <a href="https://hh.ru/employer/{{ lead.hh_employer_id }}" target="_blank" class="btn btn-sm btn-outline-secondary">Открыть на HH</a>
-      </div>
-    </div>
-    {% endif %}
+<div class="lead-page">
+  <div class="lead-back">
+    <a href="/dashboard" class="back-link">
+      <i data-lucide="arrow-left"></i>
+      <span>К списку лидов</span>
+    </a>
   </div>
 
-  <div class="col-lg-4">
-    <div class="card border-0 shadow-sm mb-3">
-      <div class="card-header bg-white"><strong>CRM</strong></div>
-      <form method="post" action="/leads/{{ lead.id }}/update">
-        <div class="card-body">
-          <div class="mb-3">
-            <label class="form-label">Статус</label>
-            <select class="form-select" name="status_value">
-              {% for s, label in status_labels.items() %}
-              <option value="{{ s }}" {% if lead.status == s %}selected{% endif %}>{{ label }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="mb-3">
-            <label class="form-label">Назначен</label>
-            <input type="text" class="form-control" name="assigned_to" value="{{ lead.assigned_to or '' }}" placeholder="Имя продажника">
-          </div>
-          <div class="mb-3">
-            <label class="form-label">Заметки</label>
-            <textarea class="form-control" name="notes" rows="4" placeholder="Что обсуждали, когда перезвонить…">{{ lead.notes or '' }}</textarea>
-          </div>
-          <button class="btn btn-primary w-100">Сохранить</button>
-        </div>
-      </form>
+  <!-- Hero -->
+  <section class="lead-hero lead-hero-p{{ lead.priority }}">
+    <div class="lead-hero-top">
+      <span class="prio-pill">
+        {% if lead.priority >= 5 %}<span class="dot p5"></span>
+        {% elif lead.priority == 4 %}<span class="dot p4"></span>
+        {% elif lead.priority == 3 %}<span class="dot p3"></span>
+        {% else %}<span class="dot p2"></span>{% endif %}
+        <span>Приоритет {{ lead.priority }}/5</span>
+      </span>
+      {% if lead.called %}
+      <span class="called-badge">
+        <i data-lucide="check"></i>
+        <span>Позвонили
+          {% if lead.called_at %}<span class="dim">· {{ lead.called_at.strftime('%d.%m %H:%M') }}</span>{% endif %}
+        </span>
+      </span>
+      {% endif %}
+    </div>
+    <h1 class="lead-name">{{ lead.company_name }}</h1>
+    {% set meta_bits = [] %}
+    {% if lead.city %}{% set _ = meta_bits.append(lead.city) %}{% endif %}
+    {% if lead.industry %}{% set _ = meta_bits.append(lead.industry) %}{% endif %}
+    {% if meta_bits %}<div class="lead-meta">{{ meta_bits|join(' · ') }}</div>{% endif %}
+    {% if lead.priority_reason %}<div class="lead-reason">{{ lead.priority_reason }}</div>{% endif %}
+
+    <div class="lead-actions">
+      {% if lead.phone %}
+      <a class="btn-action btn-action-call" href="tel:{{ lead.phone|replace(' ','')|replace('(','')|replace(')','')|replace('-','') }}">
+        <i data-lucide="phone"></i>
+        <span class="num">{{ lead.phone }}</span>
+      </a>
+      {% endif %}
+      {% if lead.website_url %}
+      <a class="btn-action btn-action-site" href="{{ lead.website_url }}" target="_blank" rel="noopener">
+        <i data-lucide="external-link"></i>
+        <span>Открыть сайт</span>
+      </a>
+      {% endif %}
+    </div>
+  </section>
+
+  <!-- CRM-блок: то, что меняет продажник -->
+  <section class="crm-box">
+    <h2 class="section-title">CRM</h2>
+
+    <!-- Чекбокс "позвонил" -->
+    <div class="crm-row" id="call-toggle">
+      {% include 'partials/call_toggle.html' %}
     </div>
 
-    <div class="card border-0 shadow-sm">
-      <div class="card-body small">
-        <div class="text-muted">HH ID: {{ lead.hh_employer_id }}</div>
-        <div class="text-muted">Добавлен: {{ lead.created_at.strftime('%d.%m.%Y %H:%M') if lead.created_at else '—' }}</div>
-        <div class="text-muted">Обновлён: {{ lead.updated_at.strftime('%d.%m.%Y %H:%M') if lead.updated_at else '—' }}</div>
-        {% if lead.ai_analyzed_at %}
-        <div class="text-muted">AI анализ: {{ lead.ai_analyzed_at.strftime('%d.%m.%Y %H:%M') }}</div>
-        {% endif %}
+    <!-- Статус сделки -->
+    <div class="crm-row">
+      <label class="crm-label">Статус сделки</label>
+      <div id="status-select">
+        {% include 'partials/status_select.html' %}
       </div>
     </div>
+
+    <!-- Фидбек: textarea с autosave -->
+    <div class="crm-row">
+      <label class="crm-label" for="feedback-textarea">
+        <span>Фидбек по звонку</span>
+        <span id="feedback-saved" class="saved-hint">
+          {% include 'partials/feedback_saved.html' %}
+        </span>
+      </label>
+      <textarea
+        id="feedback-textarea"
+        name="feedback"
+        class="feedback-input"
+        placeholder="О чём договорились? Возражения? Следующий шаг?"
+        rows="5"
+        hx-patch="/api/leads/{{ lead.id }}/feedback"
+        hx-target="#feedback-saved"
+        hx-swap="innerHTML"
+        hx-trigger="input changed delay:1000ms, blur"
+      >{{ lead.feedback or '' }}</textarea>
+    </div>
+  </section>
+
+  <!-- Summary -->
+  {% if lead.summary %}
+  <section class="section-card">
+    <h2 class="section-title">О компании</h2>
+    <p class="section-text">{{ lead.summary }}</p>
+  </section>
+  {% endif %}
+
+  <!-- Реквизиты -->
+  <section class="section-card">
+    <h2 class="section-title">Реквизиты</h2>
+    <div class="meta-grid">
+      {% if lead.website_url %}
+      <div class="meta-item"><span class="lbl">Сайт</span>
+        <span class="val"><a href="{{ lead.website_url }}" target="_blank" rel="noopener">{{ lead.website_url }}</a></span></div>
+      {% endif %}
+      {% if lead.phone %}
+      <div class="meta-item"><span class="lbl">Телефон</span><span class="val num">{{ lead.phone }}</span></div>
+      {% endif %}
+      {% if lead.city %}
+      <div class="meta-item"><span class="lbl">Город</span><span class="val">{{ lead.city }}</span></div>
+      {% endif %}
+      {% if lead.industry %}
+      <div class="meta-item"><span class="lbl">Индустрия</span><span class="val">{{ lead.industry }}</span></div>
+      {% endif %}
+      {% if lead.website_status %}
+      <div class="meta-item"><span class="lbl">Статус сайта</span><span class="val">{{ lead.website_status }}</span></div>
+      {% endif %}
+      <div class="meta-item"><span class="lbl">Дата анализа</span>
+        <span class="val num">{{ lead.analyzed_at.strftime('%Y-%m-%d %H:%M') if lead.analyzed_at else '-' }}</span></div>
+    </div>
+  </section>
+
+  <!-- Боли -->
+  {% if lead.pains %}
+  <section class="section-card">
+    <h2 class="section-title">Боли компании</h2>
+    <ol class="pains-list">
+      {% for p in lead.pains %}<li>{{ p }}</li>{% endfor %}
+    </ol>
+  </section>
+  {% endif %}
+
+  <!-- Услуги -->
+  {% if lead.recommended_services %}
+  <section class="section-card">
+    <h2 class="section-title">Что предложить — Якорь + Быстрая победа + Будущее</h2>
+    <div class="svc-list">
+      {% for s in lead.recommended_services %}<div class="svc-line">{{ s }}</div>{% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- Хук -->
+  {% if lead.sales_hook %}
+  <section class="hook-card">
+    <h2 class="section-title">Заход на первый контакт</h2>
+    <blockquote>{{ lead.sales_hook }}</blockquote>
+  </section>
+  {% endif %}
+
+  <!-- Фразы для звонка — готовый скрипт -->
+  {% if lead.talking_points %}
+  <section class="section-card talking-card">
+    <h2 class="section-title">Скрипт звонка — говори эти фразы</h2>
+    <ol class="talking-list">
+      {% for t in lead.talking_points %}
+      <li>
+        <div class="tp-text">{{ t }}</div>
+      </li>
+      {% endfor %}
+    </ol>
+    <p class="section-hint">Говори своими словами, но держись этой последовательности.</p>
+  </section>
+  {% endif %}
+
+  <!-- Апсейлы -->
+  {% if lead.upsell_offers %}
+  <section class="section-card upsell-card">
+    <h2 class="section-title">Что ещё можно продать (апсейлы)</h2>
+    <div class="upsell-list">
+      {% for u in lead.upsell_offers %}
+      <div class="upsell-item">
+        <div class="upsell-head">
+          <span class="upsell-name">{{ u.name if u is mapping else u }}</span>
+          {% if u is mapping and u.price %}<span class="upsell-price">{{ u.price }}</span>{% endif %}
+        </div>
+        {% if u is mapping and u.why %}<div class="upsell-why">{{ u.why }}</div>{% endif %}
+        {% if u is mapping and u.when %}<div class="upsell-when">Когда: {{ u.when }}</div>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <!-- Возражения и ответы -->
+  {% if lead.objections %}
+  <section class="section-card objections-card">
+    <h2 class="section-title">Что услышишь и что отвечать</h2>
+    <div class="objections-list">
+      {% for o in lead.objections %}
+      <div class="obj-item">
+        <div class="obj-q">{{ o.objection if o is mapping else o }}</div>
+        {% if o is mapping and o.answer %}
+        <div class="obj-a">{{ o.answer }}</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <div class="page-footer-note">
+    Обновлено: <span class="num">{{ lead.updated_at.strftime('%Y-%m-%d %H:%M') if lead.updated_at else '-' }}</span>
+    · ID <span class="num">{{ lead.id }}</span>
   </div>
 </div>
 {% endblock %}

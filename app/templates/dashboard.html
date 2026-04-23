@@ -1,126 +1,90 @@
 {% extends "base.html" %}
-{% block title %}Дашборд · Stenvik Leads{% endblock %}
+{% block title %}Дашборд — Stenvik Leads{% endblock %}
+
+{% macro dash_url(flt=none, ind=none) -%}
+  {%- set parts = [] -%}
+  {%- if flt %}{%- set _ = parts.append('filter=' ~ flt) -%}{% endif -%}
+  {%- if ind %}{%- set _ = parts.append('industry=' ~ ind|urlencode) -%}{% endif -%}
+  /dashboard{% if parts %}?{{ parts|join('&') }}{% endif %}
+{%- endmacro %}
+
 {% block content %}
-<div class="row mb-4">
-  <div class="col-md-3">
-    <div class="card border-0 shadow-sm">
-      <div class="card-body">
-        <div class="text-muted small">Всего лидов</div>
-        <div class="display-5 fw-bold">{{ total }}</div>
-      </div>
-    </div>
-  </div>
-  <div class="col-md-3">
-    <div class="card border-0 shadow-sm border-start border-4 border-danger">
-      <div class="card-body">
-        <div class="text-muted small">⭐⭐⭐⭐⭐ Горячие</div>
-        <div class="display-5 fw-bold text-danger">{{ by_priority.get(5, 0) }}</div>
-      </div>
-    </div>
-  </div>
-  <div class="col-md-3">
-    <div class="card border-0 shadow-sm border-start border-4 border-warning">
-      <div class="card-body">
-        <div class="text-muted small">⭐⭐⭐⭐ Тёплые</div>
-        <div class="display-5 fw-bold text-warning">{{ by_priority.get(4, 0) }}</div>
-      </div>
-    </div>
-  </div>
-  <div class="col-md-3">
-    <div class="card border-0 shadow-sm border-start border-4 border-info">
-      <div class="card-body">
-        <div class="text-muted small">⭐⭐⭐ Средние</div>
-        <div class="display-5 fw-bold text-info">{{ by_priority.get(3, 0) }}</div>
-      </div>
-    </div>
-  </div>
+<!-- Сводка + автообновление каждые 30с -->
+<div class="summary-bar"
+     id="summary"
+     hx-get="/partials/summary{% if filter or current_industry %}?{% if filter %}filter={{ filter }}{% endif %}{% if filter and current_industry %}&{% endif %}{% if current_industry %}industry={{ current_industry|urlencode }}{% endif %}{% endif %}"
+     hx-trigger="every 30s"
+     hx-swap="outerHTML">
+  {% include 'partials/summary_bar.html' %}
 </div>
 
-<div class="row">
-  <div class="col-lg-8">
-    <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white d-flex justify-content-between align-items-center">
-        <strong>🔥 Топ-10 горячих лидов в работу</strong>
-        <a href="/leads" class="btn btn-sm btn-outline-primary">Все лиды →</a>
-      </div>
-      <div class="table-responsive">
-        <table class="table table-hover mb-0">
-          <thead class="table-light">
-            <tr>
-              <th>★</th>
-              <th>Компания</th>
-              <th>Город</th>
-              <th>Сайт</th>
-              <th>Услуги</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for lead in top_leads %}
-            <tr>
-              <td>
-                {% set p = lead.ai_priority or 0 %}
-                {% set label, color = priority_labels.get(p, ('?', 'light')) %}
-                <span class="badge bg-{{ color }}">{{ '⭐' * p if p > 0 else '?' }}</span>
-              </td>
-              <td><strong>{{ lead.company_name }}</strong><br><small class="text-muted">{{ lead.industry or '—' }}</small></td>
-              <td>{{ lead.city or '—' }}</td>
-              <td>
-                {% if lead.website_status == 'no_site' %}
-                  <span class="badge bg-danger">нет сайта</span>
-                {% elif lead.website_status == 'cms_site' %}
-                  <span class="badge bg-warning text-dark">старый CMS</span>
-                {% elif lead.website_status == 'constructor_site' %}
-                  <span class="badge bg-info text-dark">конструктор</span>
-                {% elif lead.website_status == 'no_https' %}
-                  <span class="badge bg-warning text-dark">нет HTTPS</span>
-                {% elif lead.website_status == 'dead_site' %}
-                  <span class="badge bg-secondary">сайт не работает</span>
-                {% elif lead.website_status == 'has_site' %}
-                  <span class="badge bg-success">есть</span>
-                {% else %}—{% endif %}
-              </td>
-              <td><small>{{ (lead.ai_recommended_services or [])[:2] | join(', ') }}</small></td>
-              <td><a href="/leads/{{ lead.id }}" class="btn btn-sm btn-outline-dark">Открыть</a></td>
-            </tr>
-            {% else %}
-            <tr><td colspan="6" class="text-center text-muted py-4">Пока пусто — запусти пайплайн</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
+<!-- Основные фильтры (сохраняют текущую индустрию) -->
+<div class="filter-bar">
+  <a href="{{ dash_url(ind=current_industry) }}" class="filter-btn {% if not filter %}active{% endif %}">
+    <span>Все</span>
+    <span class="filter-count">{{ total }}</span>
+  </a>
+  <a href="{{ dash_url(flt='hot', ind=current_industry) }}" class="filter-btn hot {% if filter == 'hot' %}active{% endif %}">
+    <i data-lucide="flame"></i>
+    <span>Горячие</span>
+    <span class="filter-count">{{ hot_count }}</span>
+  </a>
+  <a href="{{ dash_url(flt='to_call', ind=current_industry) }}" class="filter-btn to-call {% if filter == 'to_call' %}active{% endif %}">
+    <i data-lucide="phone"></i>
+    <span>Нужно звонить</span>
+    <span class="filter-count">{{ to_call_count }}</span>
+  </a>
+  <a href="{{ dash_url(flt='called', ind=current_industry) }}" class="filter-btn {% if filter == 'called' %}active{% endif %}">
+    <i data-lucide="check"></i>
+    <span>Обзвонено</span>
+    <span class="filter-count">{{ called_count_all }}</span>
+  </a>
+  <a href="{{ dash_url(flt='deal', ind=current_industry) }}" class="filter-btn deal {% if filter == 'deal' %}active{% endif %}">
+    <i data-lucide="trending-up"></i>
+    <span>Сделки</span>
+    <span class="filter-count">{{ deal_count }}</span>
+  </a>
+  <a href="{{ dash_url(flt='mine', ind=current_industry) }}" class="filter-btn {% if filter == 'mine' %}active{% endif %}">
+    <i data-lucide="user"></i>
+    <span>Мои</span>
+    <span class="filter-count">{{ mine_count }}</span>
+  </a>
+  <a href="{{ dash_url(flt='ru', ind=current_industry) }}" class="filter-btn {% if filter == 'ru' %}active{% endif %}">
+    <span class="country-flag">🇷🇺</span>
+    <span>РФ</span>
+    <span class="filter-count">{{ ru_count }}</span>
+  </a>
+  <a href="{{ dash_url(flt='foreign', ind=current_industry) }}" class="filter-btn foreign {% if filter == 'foreign' %}active{% endif %}">
+    <i data-lucide="globe"></i>
+    <span>Иностранные</span>
+    <span class="filter-count">{{ foreign_count }}</span>
+  </a>
+</div>
 
-  <div class="col-lg-4">
-    <div class="card border-0 shadow-sm mb-3">
-      <div class="card-header bg-white"><strong>По статусам</strong></div>
-      <ul class="list-group list-group-flush">
-        {% for s, label in status_labels.items() %}
-        <li class="list-group-item d-flex justify-content-between">
-          <span>{{ label }}</span>
-          <span class="badge bg-secondary">{{ by_status.get(s, 0) }}</span>
-        </li>
-        {% endfor %}
-      </ul>
-    </div>
+<!-- Ниши: сгруппировать серию звонков по одной отрасли -->
+{% if top_industries %}
+<div class="industry-bar" aria-label="Фильтр по индустрии">
+  <span class="industry-bar-label">Ниша</span>
+  <a href="{{ dash_url(flt=filter) }}" class="industry-chip {% if not current_industry %}active{% endif %}">
+    Все
+  </a>
+  {% for ind_name, ind_cnt in top_industries %}
+  <a href="{{ dash_url(flt=filter, ind=ind_name) }}"
+     class="industry-chip {% if current_industry == ind_name %}active{% endif %}"
+     title="{{ ind_name }} · {{ ind_cnt }} лидов">
+    <span>{{ ind_name }}</span>
+    <span class="industry-chip-count">{{ ind_cnt }}</span>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
 
-    <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white"><strong>Последние запуски</strong></div>
-      <ul class="list-group list-group-flush">
-        {% for run in recent_runs %}
-        <li class="list-group-item small">
-          {{ run.started_at.strftime('%d.%m %H:%M') if run.started_at else '—' }}
-          · обработано {{ run.companies_fetched }}, добавлено <strong>{{ run.leads_created }}</strong>
-          {% if run.errors %}, ошибок <span class="text-danger">{{ run.errors }}</span>{% endif %}
-          {% if run.success %}<span class="badge bg-success float-end">OK</span>
-          {% else %}<span class="badge bg-danger float-end">FAIL</span>{% endif %}
-        </li>
-        {% else %}
-        <li class="list-group-item text-muted">Ещё не запускался</li>
-        {% endfor %}
-      </ul>
-    </div>
-  </div>
+<!-- Сетка лидов: автообновление каждые 30 сек -->
+<div class="grid-container"
+     id="leads-grid"
+     hx-get="/partials/leads-grid{% if filter or current_industry %}?{% if filter %}filter={{ filter }}{% endif %}{% if filter and current_industry %}&{% endif %}{% if current_industry %}industry={{ current_industry|urlencode }}{% endif %}{% endif %}"
+     hx-trigger="every 30s"
+     hx-swap="outerHTML">
+  {% include 'partials/leads_grid.html' %}
 </div>
 {% endblock %}

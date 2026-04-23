@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Вход — Stenvik Leads{% endblock %}
+{% block body_class %}auth-body{% endblock %}
+
+{% block content %}
+<div class="auth-card">
+  <div class="auth-brand">
+    <span class="brand-mark">▲</span>
+    <span>Stenvik Leads</span>
+  </div>
+
+  <h1 class="auth-title">Вход</h1>
+
+  {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+  <form method="post" action="/login" class="auth-form">
+    <label>
+      <span>Логин</span>
+      <input type="text" name="username" value="{{ username or '' }}"
+             autocomplete="username" autofocus required>
+    </label>
+    <label>
+      <span>Пароль</span>
+      <input type="password" name="password" autocomplete="current-password" required>
+    </label>
+    <button type="submit" class="btn-primary">Войти</button>
+  </form>
+</div>
+{% endblock %}

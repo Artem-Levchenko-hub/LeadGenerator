@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Регистрация первого админа — Stenvik Leads{% endblock %}
+{% block body_class %}auth-body{% endblock %}
+
+{% block content %}
+<div class="auth-card">
+  <div class="auth-brand">
+    <span class="brand-mark">▲</span>
+    <span>Stenvik Leads</span>
+  </div>
+
+  <h1 class="auth-title">Первая настройка</h1>
+  <p class="auth-sub">Это первый вход в приложение. Создай учётку супер-админа —
+    позже сможешь добавить продажников и других админов из панели.</p>
+
+  {% if error %}<div class="alert alert-error">{{ error }}</div>{% endif %}
+
+  <form method="post" action="/register" class="auth-form">
+    <label>
+      <span>Логин</span>
+      <input type="text" name="username" value="{{ username or '' }}"
+             autocomplete="username" autofocus required
+             minlength="3" maxlength="32"
+             pattern="[A-Za-z0-9._\-]+">
+      <small class="hint">3–32 символа: буквы, цифры, . _ -</small>
+    </label>
+    <label>
+      <span>Пароль</span>
+      <input type="password" name="password" autocomplete="new-password"
+             required minlength="8">
+      <small class="hint">Минимум 8 символов</small>
+    </label>
+    <label>
+      <span>Повтори пароль</span>
+      <input type="password" name="password2" autocomplete="new-password"
+             required minlength="8">
+    </label>
+    <button type="submit" class="btn-primary">Создать супер-админа</button>
+  </form>
+
+  <p class="auth-note">Регистрация открыта только при первом запуске.
+    Новые пользователи создаются через админ-панель.</p>
+</div>
+{% endblock %}

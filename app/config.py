@@ -2,10 +2,25 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    anthropic_api_key: str
+    # Anthropic API — не используется, если анализ делает агент Claude Code через /loop.
+    # Оставлен для обратной совместимости (например, если захочешь вернуть API-режим).
+    anthropic_api_key: str = ""
+
+    # Yandex Disk — куда сливаем готовые лиды в xlsx
+    yandex_disk_token: str = ""
+    yandex_disk_file_path: str = "/Stenvik/leads.xlsx"
+
     app_secret: str = "dev-secret-change-me"
     database_url: str = "sqlite:///./data/leads.db"
     auth_users: str = "admin:admin123"
+
+    # Токен для машинного импорта лидов (Bearer в Authorization-заголовке)
+    ingest_token: str = ""
+
+    # Для локального run.py: если задан, save-analysis и check-dup ходят
+    # в удалённое API вместо локальной БД.
+    stenvik_api_url: str = ""
+    stenvik_api_token: str = ""
 
     hh_cities: str = "1,2,3,4,38,113"
     hh_exclude_industries: str = "7"
