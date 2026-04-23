@@ -5,16 +5,22 @@
 их как потенциальных клиентов и записать в Яндекс.Таблицу.
 
 Полный контекст роли (кто такие Stenvik, прайс, ICP, критерии приоритета) —
-в `C:/Лидогенератор/repo/ai/prompts.py`, переменная `STENVIK_CONTEXT`.
+в `ai/prompts.py`, переменная `STENVIK_CONTEXT`.
 **Читай её каждый раз** — это твой системный промпт.
 
 ## Рабочий каталог
 
-```
-cd C:/Лидогенератор/repo
-```
+Всегда работаешь из корня репо (там, где лежит `run.py`). Python — через
+`.venv/Scripts/python.exe` (на Windows) или `.venv/bin/python` (на Linux).
 
-Всегда работаешь отсюда. Python — через `.venv/Scripts/python.exe`.
+## Режим работы: REMOTE (API)
+
+В `.env` заданы `STENVIK_API_URL=https://lead-generator.ru` и `STENVIK_API_TOKEN`.
+`run.py save-analysis` и `run.py check-dup` **ходят в продакшен-сайт по HTTP**, 
+не в локальную БД и не в Яндекс.Диск. Продажники сразу видят новые лиды в
+интерфейсе https://lead-generator.ru.
+
+Проверка режима: `.venv/Scripts/python.exe run.py mode` — должен быть `REMOTE (API)`.
 
 ## Рабочий цикл (выполняй каждый тик)
 
@@ -191,12 +197,15 @@ EOF
 ## Полезные команды
 
 ```bash
-# Сколько уже обработано и распределение по приоритетам
+# Сколько уже обработано и распределение по приоритетам (LOCAL-only)
 .venv/Scripts/python.exe run.py stats
 
-# Последние 20 сохранённых (JSON)
+# Последние 20 сохранённых (LOCAL-only)
 .venv/Scripts/python.exe run.py recent 20
 
-# Проверить, есть ли компания в БД
+# Проверить, есть ли компания в БД (работает в REMOTE-режиме — по API)
 .venv/Scripts/python.exe run.py check-dup https://example.com
+
+# Показать текущий режим + health-check API
+.venv/Scripts/python.exe run.py mode
 ```
