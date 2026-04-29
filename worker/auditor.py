@@ -135,14 +135,22 @@ def audit(db: Session, message: models.OutboxMessage) -> AuditResult:
             primary = company.name.split(",")[0].strip().lower()
             orgforms = {"ооо", "ип", "гбуз", "фгбу", "фгбоу", "фгуп", "зао", "оао", "пао", "нко", "ано", "чуз"}
             words = [w for w in primary.split() if len(w) >= 3 and w not in orgforms]
-            name_ok = bool(words and any(w in head for w in words))
+            # Stem-match для русских склонений: «ржд-медицина» → stem «ржд-медицин»
+            # → matches «ржд-медицины» (genitive). Берём min(len-2, max(4, len)).
+            def _stem(w: str) -> str:
+                if len(w) <= 4:
+                    return w
+                return w[:max(4, len(w) - 2)]
+            name_ok = bool(words and any(_stem(w) in head for w in words))
 
             domain_ok = False
             if company.website_url:
                 from urllib.parse import urlparse
                 d = (urlparse(company.website_url).hostname or "").lower().lstrip("www.")
                 if d:
-                    domain_ok = d in head
+                    # Проверяем как сам домен, так и его «корень» (без TLD)
+                    # — пишут часто "rzd-med" вместо "rzd-med.ru"
+                    domain_ok = d in head or d.split(".")[0] in head
 
             if not (name_ok or domain_ok):
                 return AuditResult.reject(
