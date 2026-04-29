@@ -42,10 +42,13 @@ MODEL_PRICING = {
     "claude-haiku-4-5":                (0.80, 4.0, 0.08, 1.0),
     "claude-haiku-4-5-20251001":       (0.80, 4.0, 0.08, 1.0),
     # DeepSeek
-    "deepseek/deepseek-chat":          (0.14, 0.28, 0.014, 0.014),
-    "deepseek/deepseek-chat-v3.1":     (0.14, 0.28, 0.014, 0.014),
-    "deepseek/deepseek-v3.1":          (0.14, 0.28, 0.014, 0.014),
-    "deepseek-chat":                   (0.14, 0.28, 0.014, 0.014),
+    # OpenRouter via DeepInfra (самый дешёвый роут на 2026-04): input ~$0.32/M,
+    # output ~$0.89/M. Был указан $0.14/$0.28 (наверное VseGPT) — неточно для OR.
+    "deepseek/deepseek-chat":          (0.32, 0.89, 0.032, 0.032),
+    "deepseek/deepseek-chat-v3":       (0.32, 0.89, 0.032, 0.032),
+    "deepseek/deepseek-chat-v3.1":     (0.32, 0.89, 0.032, 0.032),
+    "deepseek/deepseek-v3.1":          (0.32, 0.89, 0.032, 0.032),
+    "deepseek-chat":                   (0.32, 0.89, 0.032, 0.032),
     # GPT
     "openai/gpt-5":                    (1.25, 10.0, 0.125, 0.125),
     "openai/gpt-5-mini":               (0.25, 2.0, 0.025, 0.025),

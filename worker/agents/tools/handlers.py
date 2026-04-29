@@ -65,7 +65,9 @@ def fetch_site(*, url: str) -> str:
 
     text_content = soup.get_text(" ", strip=True)
     text_len = len(text_content)
-    text_sample = text_content[:1500]
+    # 500 chars хватает чтобы понять отрасль/услуги; 1500 раздували tool_result
+    # который дальше копится в messages всех итераций ReAct loop'а.
+    text_sample = text_content[:500]
 
     # CMS-детект (грубый эвристический)
     html_low = (resp.text or "").lower()
@@ -92,8 +94,8 @@ def fetch_site(*, url: str) -> str:
         "status_code": resp.status_code,
         "is_https": is_https,
         "redirected_to_https": redirected_to_https,
-        "title": title[:300],
-        "description": description[:500],
+        "title": title[:150],
+        "description": description[:200],
         "has_viewport_meta": has_viewport,
         "has_open_graph": has_og,
         "detected_cms": cms,
