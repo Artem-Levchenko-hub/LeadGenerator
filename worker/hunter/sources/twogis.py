@@ -8,19 +8,25 @@ worker.hunter.enrichment.enrich_firm — это даёт реальный сай
 для Outreach Agent.
 
 Стратегия:
-- Перебираем (категория × город) парами из settings.
-- Берём первую страницу page_size=10 на каждую пару (хватит на 1 тик,
-  free-tier не даёт больше).
+- Перебираем (категория × город) парами из settings — но **детерминированно
+  ротируем** стартовую пару и страницу через персистентный счётчик тиков
+  в data/hunter_twogis_state.json. Без этого Hunter залипал на (pairs[0],
+  page=1) и выдавал одни и те же 10 фирм каждый тик.
+- Формула: start_pair = tick % len(pairs), page = (tick // len(pairs)) % MAX_PAGE + 1.
+  Это даёт len(pairs) × MAX_PAGE уникальных стартовых точек до повторения
+  (~3-7 дней непрерывной работы Hunter'а с шагом 20 мин).
+- 2GIS Free-tier: page_size > 10 даёт 400. Берём 10.
 - Для каждого попавшегося item — обогащаем (сайт/телефон/email).
 - Дедуп по 2gis item.id.
-- Не сохраняем компании на которые уже есть Company.lead_id связь.
 
 Доки: https://docs.2gis.com/ru/api/search/places/reference/3.0/items
 """
 from __future__ import annotations
 
+import json
 import logging
 import time
+from pathlib import Path
 from typing import Iterable, Iterator
 
 import httpx
@@ -38,6 +44,25 @@ _FIELDS = (
     "items.point,items.address,items.adm_div,items.org,"
     "items.id,items.full_name,items.rubrics,items.attribute_groups"
 )
+_STATE_FILE = Path("data/hunter_twogis_state.json")
+_MAX_PAGE = 5  # 2GIS free-tier обычно отдаёт 5 страниц по 10 item.
+
+
+def _load_state() -> dict:
+    if not _STATE_FILE.exists():
+        return {}
+    try:
+        return json.loads(_STATE_FILE.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def _save_state(state: dict) -> None:
+    try:
+        _STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _STATE_FILE.write_text(json.dumps(state), encoding="utf-8")
+    except Exception:  # noqa: BLE001
+        log.exception("failed to write hunter state")
 
 
 class TwoGISSource(LeadSource):
@@ -63,18 +88,35 @@ class TwoGISSource(LeadSource):
             return
 
         emitted = 0
-        # Перебираем пары "round-robin": сначала по одной категории на каждый
-        # город, потом следующая. Это даёт более разнообразные лиды чем
-        # «все стоматологии Москвы → потом все Питера».
         pairs = [(cat, city) for cat in self.categories for city in self.cities]
-        for category, city in pairs:
+        if not pairs:
+            return
+
+        # Детерминированная ротация: каждый тик стартуем с другой пары и
+        # страницы. Без этого мы залипали на pairs[0] page=1 → одни и те
+        # же 10 фирм в каждом тике → 0 новых.
+        state = _load_state()
+        tick = int(state.get("tick", 0)) + 1
+        state["tick"] = tick
+        _save_state(state)
+
+        n = len(pairs)
+        start = tick % n
+        page = (tick // n) % _MAX_PAGE + 1
+        rotated = pairs[start:] + pairs[:start]
+        log.info(
+            "2gis hunter: tick=%d start_pair=%s page=%d (pairs=%d, max_page=%d)",
+            tick, rotated[0], page, n, _MAX_PAGE,
+        )
+
+        for category, city in rotated:
             if emitted >= limit:
                 return
             try:
                 # 2GIS Free-tier: page_size > 10 даёт 400. Берём 10.
-                items = self._search_page(category, city, page_size=10)
+                items = self._search_page(category, city, page_size=10, page=page)
             except Exception:  # noqa: BLE001
-                log.exception("2gis search failed for %s/%s", category, city)
+                log.exception("2gis search failed for %s/%s page=%d", category, city, page)
                 continue
             for item in items:
                 if emitted >= limit:
@@ -102,10 +144,13 @@ class TwoGISSource(LeadSource):
         if contacts.email and not hit.email:
             hit.email = contacts.email
 
-    def _search_page(self, category: str, city: str, page_size: int) -> list[dict]:
+    def _search_page(
+        self, category: str, city: str, page_size: int, page: int = 1,
+    ) -> list[dict]:
         params = {
             "q": f"{category} {city}",
             "page_size": str(page_size),
+            "page": str(page),
             "fields": _FIELDS,
             "key": self.api_key,
         }
