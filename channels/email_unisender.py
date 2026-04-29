@@ -49,25 +49,52 @@ def _build_message(
     return em
 
 
+def _is_local_relay() -> bool:
+    """Локальный relay (Postfix на той же машине) — не нужны SSL/login."""
+    host = (settings.smtp_host or "").lower()
+    return host in ("localhost", "127.0.0.1", "") or settings.smtp_port == 25
+
+
 def send_email_sync(msg: models.OutboxMessage) -> dict:
-    """Синхронная отправка через SMTP_SSL. Возвращает {ok, provider_id, error}."""
-    if not settings.smtp_host or not settings.smtp_user:
-        return {"ok": False, "error": "SMTP not configured (.env)"}
+    """Синхронная отправка. Поддерживает 2 режима:
+
+    1. Local relay (host=localhost, port=25) — plain SMTP без auth.
+       Используется когда на VPS стоит свой Postfix + OpenDKIM (наш случай).
+    2. External provider (UniSender / SendPulse / Resend / Yandex Postbox) —
+       SMTP_SSL на 465 + login.
+
+    Возвращает {ok, provider_id, error}.
+    """
+    if not settings.smtp_host:
+        return {"ok": False, "error": "SMTP not configured (.env smtp_host)"}
+
+    use_local = _is_local_relay()
+    if not use_local and not settings.smtp_user:
+        return {"ok": False, "error": "SMTP requires user/password for non-local provider"}
 
     domain = (settings.smtp_from_email or "stenvik.studio").split("@")[-1]
     message_id = make_msgid(domain=domain)
 
     try:
         em = _build_message(msg, message_id)
-        with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=30) as smtp:
-            smtp.login(settings.smtp_user, settings.smtp_password)
-            smtp.send_message(em)
+        if use_local:
+            # Локальный Postfix: plain SMTP, без auth, на :25.
+            # OpenDKIM-milter подпишет письмо автоматически (settings:8891).
+            with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=30) as smtp:
+                smtp.send_message(em)
+            provider = "local_postfix"
+        else:
+            # External: SSL + login.
+            with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=30) as smtp:
+                smtp.login(settings.smtp_user, settings.smtp_password)
+                smtp.send_message(em)
+            provider = "unisender_smtp"
     except Exception as e:  # noqa: BLE001
         log.exception("SMTP send failed for outbox %s", msg.id)
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
     return {
         "ok": True,
-        "provider": "unisender_smtp",
+        "provider": provider,
         "provider_id": message_id.strip("<>"),
     }
