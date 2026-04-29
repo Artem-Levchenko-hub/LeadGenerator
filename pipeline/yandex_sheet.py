@@ -1,10 +1,10 @@
 """Работа с лидами на Яндекс.Диске.
 
 Архитектура хранения:
-- `/Stenvik/leads.xlsx` — компактный дашборд: дата, компания, телефон, город,
+- `/Omnia/leads.xlsx` — компактный дашборд: дата, компания, телефон, город,
   приоритет (с цветом), ссылка "Детали" (на MD-файл), + CRM-поля продажника
   (позвонил, статус сделки, ответственный, фидбэк).
-- `/Stenvik/leads/<slug>.md` — подробности по каждой компании (описание, боли,
+- `/Omnia/leads/<slug>.md` — подробности по каждой компании (описание, боли,
   услуги, хук для продажника) в красивом markdown-формате.
 
 Каждый MD-файл публикуется отдельно → public URL вшивается в ячейку таблицы
@@ -28,7 +28,7 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 YANDEX_API = "https://cloud-api.yandex.net/v1/disk/resources"
-LEADS_FOLDER = "/Stenvik/leads"
+LEADS_FOLDER = "/Omnia/leads"
 
 # Компактные колонки — всё что за пределами одного экрана ушло в MD
 COLUMNS = [
@@ -214,7 +214,7 @@ def _build_markdown(
     for i, pain in enumerate(pains, 1):
         lines.append(f"{i}. {pain}")
     lines.append("")
-    lines.append("## Что предложить (услуги Stenvik)")
+    lines.append("## Что предложить (услуги Omnia)")
     lines.append("")
     for s in recommended_services:
         lines.append(f"- {s}")
@@ -227,7 +227,7 @@ def _build_markdown(
 
 
 def upload_markdown_lead(company_name: str, markdown: str) -> tuple[str, str]:
-    """Загружает MD-файл в /Stenvik/leads/ и публикует. Возвращает (remote_path, public_url)."""
+    """Загружает MD-файл в /Omnia/leads/ и публикует. Возвращает (remote_path, public_url)."""
     slug = _slugify(company_name)
     # чтобы избежать коллизий — добавим timestamp-суффикс
     stamp = datetime.now().strftime("%y%m%d%H%M")
@@ -239,7 +239,7 @@ def upload_markdown_lead(company_name: str, markdown: str) -> tuple[str, str]:
 
 
 def upload_html_lead(company_name: str, html: str) -> tuple[str, str]:
-    """Загружает HTML-страницу лида в /Stenvik/leads/ и публикует. Возвращает (remote_path, public_url)."""
+    """Загружает HTML-страницу лида в /Omnia/leads/ и публикует. Возвращает (remote_path, public_url)."""
     slug = _slugify(company_name)
     stamp = datetime.now().strftime("%y%m%d%H%M")
     remote_path = f"{LEADS_FOLDER}/{slug}-{stamp}.html"
@@ -375,7 +375,7 @@ def publish_sheet() -> str:
 
 # ==== мобильный HTML-дашборд ====
 
-DASHBOARD_PATH = "/Stenvik/dashboard.html"
+DASHBOARD_PATH = "/Omnia/dashboard.html"
 
 
 def _format_phone_tel(phone: str) -> str:
@@ -716,7 +716,7 @@ def build_lead_page_html(
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{_esc(company_name)} — лид Stenvik</title>
+<title>{_esc(company_name)} — лид Omnia</title>
 <style>{css}</style>
 </head>
 <body>
@@ -740,11 +740,11 @@ def build_lead_page_html(
 
   {f'<section class="section"><h2>Боли — что не так с цифровизацией</h2><ol class="pains">{pains_html}</ol></section>' if pains_html else ''}
 
-  {f'<section class="section"><h2>Что предложить (услуги Stenvik)</h2><div class="svc-grid">{services_html}</div></section>' if services_html else ''}
+  {f'<section class="section"><h2>Что предложить (услуги Omnia)</h2><div class="svc-grid">{services_html}</div></section>' if services_html else ''}
 
   {f'<section class="hook-box"><h2>Хук для продажника</h2><blockquote>{_esc(sales_hook)}</blockquote></section>' if sales_hook else ''}
 
-  <div class="page-footer">Дата анализа: {_esc(date_str)} · Stenvik Lead Pipeline</div>
+  <div class="page-footer">Дата анализа: {_esc(date_str)} · Omnia Lead Pipeline</div>
 </main>
 </body>
 </html>
@@ -979,13 +979,13 @@ def build_dashboard_html(leads: list[dict]) -> str:
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Лиды Stenvik — дашборд продажника</title>
+<title>Лиды Omnia — дашборд продажника</title>
 <style>{shared}{dashboard_css}</style>
 </head>
 <body>
 <header class="site-header">
   <div class="site-header-inner" style="flex-direction:column; align-items:flex-start; gap:0;">
-    <h1>Лиды Stenvik</h1>
+    <h1>Лиды Omnia</h1>
     <div class="upd">Данные: {now} · <span id="cd" class="countdown">обновление через 3:00</span></div>
   </div>
 </header>

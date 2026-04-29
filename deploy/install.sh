@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install.sh — первичная установка Stenvik Leads на Debian/Ubuntu VPS.
+# install.sh — первичная установка Omnia Leads на Debian/Ubuntu VPS.
 # IP-РЕЖИМ: приложение слушает напрямую 0.0.0.0:8080 без nginx и без SSL.
 # Доступ: http://<IP-сервера>:8080/
 #
@@ -26,7 +26,7 @@ SERVICE_NAME="stenvik-leads"
 PUBLIC_IP="$(curl -s https://api.ipify.org 2>/dev/null || curl -s ifconfig.me 2>/dev/null || echo '<unknown>')"
 
 echo "========================================"
-echo " Stenvik Leads installer (IP-mode)"
+echo " Omnia Leads installer (IP-mode)"
 echo "========================================"
 echo "  App dir:   $APP_DIR"
 echo "  User:      $CURRENT_USER"
@@ -66,7 +66,7 @@ echo "  Python-зависимости обновлены."
 echo "[3/6] .env..."
 if [ ! -f .env ]; then
     cat > .env <<EOF
-# Stenvik Leads — переменные окружения
+# Omnia Leads — переменные окружения
 app_secret=$APP_SECRET
 database_url=sqlite:///./data/leads.db
 yandex_disk_token=$YANDEX_TOKEN
@@ -91,7 +91,7 @@ echo "[5/6] Systemd сервис..."
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 sudo tee "$SERVICE_FILE" > /dev/null <<EOF
 [Unit]
-Description=Stenvik Leads — CRM для продажников
+Description=Omnia Leads — CRM для продажников
 After=network.target
 
 [Service]

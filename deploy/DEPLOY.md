@@ -15,7 +15,7 @@ apt update && apt upgrade -y
 apt install -y python3-venv python3-pip nginx git certbot python3-certbot-nginx ufw
 
 # Создать системного пользователя
-adduser --system --group --home /opt/lead_pipeline stenvik
+adduser --system --group --home /opt/lead_pipeline omnia
 
 # Настроить файрвол
 ufw allow OpenSSH
@@ -29,7 +29,7 @@ ufw --force enable
 ```bash
 cd /opt
 git clone <репозиторий> lead_pipeline
-chown -R stenvik:stenvik /opt/lead_pipeline
+chown -R omnia:omnia /opt/lead_pipeline
 ```
 
 **Вариант Б — через scp с твоего компьютера:**
@@ -37,15 +37,15 @@ chown -R stenvik:stenvik /opt/lead_pipeline
 # На локальной машине
 scp -r "D:/Новая папка/lead_pipeline/" root@<IP>:/opt/
 # На сервере
-chown -R stenvik:stenvik /opt/lead_pipeline
+chown -R omnia:omnia /opt/lead_pipeline
 ```
 
 ## 3. Создать venv и установить зависимости
 
 ```bash
 cd /opt/lead_pipeline
-sudo -u stenvik python3 -m venv .venv
-sudo -u stenvik .venv/bin/pip install -r requirements.txt
+sudo -u omnia python3 -m venv .venv
+sudo -u omnia .venv/bin/pip install -r requirements.txt
 ```
 
 ## 4. Настроить .env
@@ -61,12 +61,12 @@ nano .env
 
 Затем:
 ```bash
-chown stenvik:stenvik .env
+chown omnia:omnia .env
 chmod 600 .env
 mkdir -p /var/log/lead_pipeline
-chown stenvik:stenvik /var/log/lead_pipeline
+chown omnia:omnia /var/log/lead_pipeline
 mkdir -p /opt/lead_pipeline/data
-chown stenvik:stenvik /opt/lead_pipeline/data
+chown omnia:omnia /opt/lead_pipeline/data
 ```
 
 ## 5. Запустить как systemd-сервис
@@ -83,7 +83,7 @@ systemctl status lead-pipeline
 
 ```bash
 # Заменить домен в конфиге на свой
-sed -i 's/leads.stenvik.studio/<ваш-домен>/g' deploy/nginx.conf
+sed -i 's/leads.omniadevelop.com/<ваш-домен>/g' deploy/nginx.conf
 cp deploy/nginx.conf /etc/nginx/sites-available/lead-pipeline
 ln -sf /etc/nginx/sites-available/lead-pipeline /etc/nginx/sites-enabled/
 
@@ -112,7 +112,7 @@ curl -I https://<ваш-домен>/health
 Сначала проверь вручную, что всё работает:
 ```bash
 cd /opt/lead_pipeline
-sudo -u stenvik .venv/bin/python run.py pipeline 3
+sudo -u omnia .venv/bin/python run.py pipeline 3
 ```
 
 Если отработало — планировщик в сервисе будет дёргать пайплайн каждые 15 минут автоматически.
@@ -121,8 +121,8 @@ sudo -u stenvik .venv/bin/python run.py pipeline 3
 
 ```bash
 cd /opt/lead_pipeline
-sudo -u stenvik git pull
-sudo -u stenvik .venv/bin/pip install -r requirements.txt
+sudo -u omnia git pull
+sudo -u omnia .venv/bin/pip install -r requirements.txt
 systemctl restart lead-pipeline
 ```
 
@@ -136,7 +136,7 @@ journalctl -u lead-pipeline -f --since "1 hour ago"
 tail -f /var/log/lead_pipeline/error.log
 
 # БД (размер, количество лидов)
-sudo -u stenvik sqlite3 /opt/lead_pipeline/data/leads.db "select count(*) from leads;"
+sudo -u omnia sqlite3 /opt/lead_pipeline/data/leads.db "select count(*) from leads;"
 
 # Статус сервиса
 systemctl status lead-pipeline

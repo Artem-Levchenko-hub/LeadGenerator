@@ -1,5 +1,5 @@
 [Unit]
-Description=Stenvik Agent Studio Worker
+Description=Omnia Develop Agent Studio Worker
 After=network.target
 Wants=network-online.target
 

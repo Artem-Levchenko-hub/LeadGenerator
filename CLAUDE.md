@@ -1,8 +1,8 @@
-# Stenvik Lead Pipeline — агент-режим (REMOTE)
+# Omnia Lead Pipeline — агент-режим (REMOTE)
 
 ## Что этот репо
 
-Автономный генератор B2B-лидов для цифровой студии **Stenvik**. Агент Claude Code
+Автономный генератор B2B-лидов для цифровой студии **Omnia**. Агент Claude Code
 по расписанию ищет российские компании через WebSearch, анализирует их как
 потенциальных клиентов и **шлёт готовые лиды прямо в сайт
 https://lead-generator.ru** (через REST API `/api/leads/import`).
@@ -34,7 +34,7 @@ https://lead-generator.ru** (через REST API `/api/leads/import`).
 
 ```
 Skill: loop
-args: "Прочитай ROUTINE.md и выполни один рабочий цикл: найди 2-3 новые российские компании через WebSearch по категориям ICP Stenvik (non-IT сервисный бизнес 20+ сотрудников), проанализируй их с контекстом из ai/prompts.py, отправь в https://lead-generator.ru через '.venv/Scripts/python.exe run.py save-analysis'. Интервал между тиками 25-35 минут (self-paced). Не задавай вопросов, работай автономно."
+args: "Прочитай ROUTINE.md и выполни один рабочий цикл: найди 2-3 новые российские компании через WebSearch по категориям ICP Omnia (non-IT сервисный бизнес 20+ сотрудников), проанализируй их с контекстом из ai/prompts.py, отправь в https://lead-generator.ru через '.venv/Scripts/python.exe run.py save-analysis'. Интервал между тиками 25-35 минут (self-paced). Не задавай вопросов, работай автономно."
 ```
 
 Это запустит самоподдерживающийся цикл: агент каждые ~30 минут добавляет
@@ -47,7 +47,7 @@ args: "Прочитай ROUTINE.md и выполни один рабочий ц�
 | Путь | Что |
 |---|---|
 | `ROUTINE.md` | Инструкция агента на каждый тик цикла (REMOTE-режим) |
-| `ai/prompts.py` | `STENVIK_CONTEXT` — кто такие Stenvik, ICP, прайс, критерии приоритета |
+| `ai/prompts.py` | `STENVIK_CONTEXT` — кто такие Omnia, ICP, прайс, критерии приоритета |
 | `run.py` | Точка входа: `save-analysis`, `check-dup`, `mode`, `loop-state` |
 | `pipeline/save_analyzed.py` | LOCAL-режим: пишет в SQLite + Я.Диск (fallback, в REMOTE не используется) |
 | `pipeline/yandex_sheet.py` | LOCAL-режим: работа с .xlsx на Я.Диске |

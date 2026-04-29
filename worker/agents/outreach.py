@@ -100,7 +100,7 @@ def run_first_touch(company_id: int, task_id: int | None = None) -> dict:
 5. Драфт письма через draft_message(channel='email', to_address=<реальный B2B email>).
    • body должен начинаться с реального названия из `name_real`.
    • НЕ упоминай факты которых нет в `facts` (количество филиалов, годы, имена врачей и т.п.).
-   • Подпись Stenvik с email и сайтом, opt-out обязателен.
+   • Подпись Omnia с email и сайтом, opt-out обязателен.
 
 6. ВСЕГДА завершайся через finish(summary="...").
 

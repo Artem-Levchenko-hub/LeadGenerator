@@ -1,4 +1,4 @@
-"""Модели SQLite для веб-приложения Stenvik Leads.
+"""Модели SQLite для веб-приложения Omnia Leads.
 
 Структура:
 - User — продажники и админы (роли admin | sales)

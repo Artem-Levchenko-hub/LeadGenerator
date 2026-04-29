@@ -1,4 +1,4 @@
-"""Strategic Orchestrator — «CEO Stenvik».
+"""Strategic Orchestrator — «CEO Omnia».
 
 Задача: ежедневно (или по требованию) аудит-ить состояние outbound-машины
 и выдавать владельцу:
@@ -99,7 +99,7 @@ _TUNABLE_BLOCKS = [
     {"file": "ai/prompts.py", "block": "HUMAN_VOICE_RULES",
      "purpose": "Запреты на ИИ-речь + примеры живой."},
     {"file": "ai/prompts.py", "block": "PAIN_TO_SOLUTION_MAP",
-     "purpose": "Таблица боль → продукт Stenvik."},
+     "purpose": "Таблица боль → продукт Omnia."},
     {"file": "ai/prompts.py", "block": "WEAKNESSES_TAXONOMY",
      "purpose": "Виды слабых мест сайта для record_weakness."},
     {"file": "ai/prompts.py", "block": "ANTI_HALLUCINATION_RULES",
@@ -366,7 +366,7 @@ def _recent_proposals(db) -> list[dict[str, Any]]:
 # CEO Prompt
 # ============================================================
 
-CEO_SYSTEM_PROMPT = """Ты — CEO/стратегический оркестратор студии разработки **Stenvik**.
+CEO_SYSTEM_PROMPT = """Ты — CEO/стратегический оркестратор студии разработки **Omnia**.
 
 Цель машины — автономно находить B2B-клиентов на разработку ПО, вести с ними
 диалог и доводить до подписания договора. Полный pipeline:
@@ -438,7 +438,7 @@ prompt-блоков агентов, чтобы их поведение реал�
 ⚠️ Жёсткие правила, которые нельзя нарушать в новых версиях:
 - В INNERTALK-секции (если блок её содержит) НИКОГДА не пиши о
   шифровании / E2E / encryption — Auditor блокирует.
-- Подпись Stenvik в OUTREACH должна содержать слова `stenvik` и
+- Подпись Omnia в OUTREACH должна содержать слова `omnia` и
   `unsubscribe` (Auditor проверяет).
 - Не удаляй существующий контент бездумно — только улучшай или замещай.
 - Не делай блок длиннее +50% от текущего размера (поедаешь токены каждого
@@ -607,7 +607,7 @@ def _call_llm(api_key: str, user_msg: str, max_tokens: int, model: str):
         max_tokens=max_tokens,
         extra_headers={
             "HTTP-Referer": "https://lead-generator.ru",
-            "X-Title": "Stenvik CEO Audit",
+            "X-Title": "Omnia CEO Audit",
         },
     )
 

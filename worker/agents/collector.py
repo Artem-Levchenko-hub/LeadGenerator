@@ -38,7 +38,7 @@ log = logging.getLogger(__name__)
 COLLECTOR_MODEL = "deepseek/deepseek-chat"
 
 
-COLLECTOR_SYSTEM_PROMPT = """Ты — наблюдатель за outbound-машиной Stenvik.
+COLLECTOR_SYSTEM_PROMPT = """Ты — наблюдатель за outbound-машиной Omnia.
 
 Каждый час ты получаешь snapshot статистики (новые лиды за час, отбраковки
 outbox, стоимость LLM, ошибки Hunter и т.д.) и предыдущий snapshot.
@@ -193,7 +193,7 @@ def _summarize_with_deepseek(facts: dict[str, Any]) -> tuple[str, dict[str, Any]
             max_tokens=400,
             extra_headers={
                 "HTTP-Referer": "https://lead-generator.ru",
-                "X-Title": "Stenvik Observer",
+                "X-Title": "Omnia Observer",
             },
         )
     except APIStatusError as e:

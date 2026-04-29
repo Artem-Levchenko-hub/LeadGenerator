@@ -6,7 +6,7 @@
 ## Предусловия
 
 - VPS `170.168.72.200` (`i48ptgvnis`), путь `/home/i48ptgvnis/stenvik-leads/`.
-- Существующий `stenvik-web.service` уже работает (FastAPI-дашборд).
+- Существующий `omnia-web.service` уже работает (FastAPI-дашборд).
 - Доступ по SSH (ключ или пароль).
 
 ## Шаги
@@ -44,10 +44,10 @@ DAILY_LLM_BUDGET_USD=20
 # === SMTP (UniSender или любой) ===
 SMTP_HOST=smtp.unisender.com
 SMTP_PORT=465
-SMTP_USER=outreach@stenvik.studio
+SMTP_USER=outreach@omniadevelop.com
 SMTP_PASSWORD=...
-SMTP_FROM_EMAIL=outreach@stenvik.studio
-SMTP_FROM_NAME=Stenvik
+SMTP_FROM_EMAIL=outreach@omniadevelop.com
+SMTP_FROM_NAME=Omnia
 
 # === Лимиты и холодильник ===
 DAILY_EMAIL_LIMIT=30
@@ -76,21 +76,21 @@ OUTBOX_HOLDING_SECONDS=600
 ### 5) Установить systemd-юнит воркера
 
 ```bash
-sudo cp deploy/stenvik-worker.service /etc/systemd/system/stenvik-worker.service
+sudo cp deploy/omnia-worker.service /etc/systemd/system/omnia-worker.service
 sudo systemctl daemon-reload
-sudo systemctl enable stenvik-worker
-sudo systemctl start stenvik-worker
+sudo systemctl enable omnia-worker
+sudo systemctl start omnia-worker
 ```
 
 Проверка:
 ```bash
-systemctl status stenvik-worker
-journalctl -u stenvik-worker -f
+systemctl status omnia-worker
+journalctl -u omnia-worker -f
 ```
 
 В логах должно появиться:
 ```
-Stenvik worker starting...
+Omnia worker starting...
 Worker is now running. Ctrl+C to stop.
 orchestrator.tick: {'enqueued_first_touch': 0, 'enqueued_continue': 0}
 ```
@@ -131,7 +131,7 @@ import secrets
 with SessionLocal() as db:
     msg = models.OutboxMessage(
         company_id=None, channel='email', to_address='test@example.com',
-        body_text='Расскажу про innertalk.space — корпоративный мессенджер с зашифрованными чатами. stenvik.studio. Unsubscribe.',
+        body_text='Расскажу про innertalk.space — корпоративный мессенджер с зашифрованными чатами. omniadevelop.com. Unsubscribe.',
         status='draft', recall_token=secrets.token_urlsafe(16),
     )
     print(audit(db, msg))  # должно: rejected, rule=innertalk_no_encryption
@@ -141,8 +141,8 @@ with SessionLocal() as db:
 ### 7) Откат
 
 ```bash
-sudo systemctl stop stenvik-worker
-sudo systemctl disable stenvik-worker
+sudo systemctl stop omnia-worker
+sudo systemctl disable omnia-worker
 git revert HEAD
 ```
 

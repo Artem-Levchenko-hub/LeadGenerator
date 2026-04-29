@@ -1,4 +1,4 @@
-/* Stenvik Leads — клиентский JS. */
+/* Omnia Leads — клиентский JS. */
 
 // ==== Lucide icons ====
 // Lucide заменяет <i data-lucide="name"></i> на inline SVG.
@@ -123,7 +123,7 @@ function showIOSInstallHint() {
         Добавить на главный экран
       </div>
       <p style="font-size: 13px; color: #737373; margin: 0 0 12px; line-height: 1.55;">
-        Чтобы Stenvik Leads работал как приложение:
+        Чтобы Omnia Leads работал как приложение:
       </p>
       <ol style="text-align: left; font-size: 13px; padding-left: 20px; margin: 0 0 8px; line-height: 1.7;">
         <li>Нажми кнопку <strong>«Поделиться»</strong></li>

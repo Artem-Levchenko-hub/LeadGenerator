@@ -1,4 +1,4 @@
-"""FastAPI веб-приложение для Stenvik Leads.
+"""FastAPI веб-приложение для Omnia Leads.
 
 Запуск в dev:
     .venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8001
@@ -51,12 +51,12 @@ STATIC_DIR = APP_ROOT / "static"
 
 # ==== App setup ====
 
-app = FastAPI(title="Stenvik Leads", docs_url=None, redoc_url=None)
+app = FastAPI(title="Omnia Leads", docs_url=None, redoc_url=None)
 
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.app_secret,
-    session_cookie="stenvik_session",
+    session_cookie="omnia_session",
     max_age=60 * 60 * 24 * 14,  # 14 дней
     same_site="lax",
     https_only=False,  # Prod: поставим через env

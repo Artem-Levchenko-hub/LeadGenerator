@@ -160,10 +160,10 @@ def audit(db: Session, message: models.OutboxMessage) -> AuditResult:
 
     # Rule 5+6: signature + opt-out (только email)
     if message.channel == models.CHANNEL_EMAIL:
-        if "stenvik" not in body_low:
+        if "omnia" not in body_low:
             return AuditResult.reject(
                 "signature_present",
-                "no 'stenvik' or 'stenvik.studio' in body — signature missing",
+                "no 'omnia' or 'omniadevelop.com' in body — signature missing",
             )
         if "unsubscribe" not in body_low and "отпис" not in body_low:
             return AuditResult.reject(

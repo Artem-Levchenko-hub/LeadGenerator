@@ -36,7 +36,7 @@ def fetch_site(*, url: str) -> str:
     try:
         with httpx.Client(
             follow_redirects=True, timeout=15.0,
-            headers={"User-Agent": "Mozilla/5.0 (compatible; StenvikBot/1.0)"},
+            headers={"User-Agent": "Mozilla/5.0 (compatible; OmniaBot/1.0)"},
         ) as client:
             resp = client.get(url)
         timing["load_seconds"] = round((datetime.utcnow() - start).total_seconds(), 2)

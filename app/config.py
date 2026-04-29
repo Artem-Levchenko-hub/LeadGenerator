@@ -48,7 +48,7 @@ class Settings(BaseSettings):
 
     # === Yandex Disk (LOCAL-режим, fallback) ===
     yandex_disk_token: str = ""
-    yandex_disk_file_path: str = "/Stenvik/leads.xlsx"
+    yandex_disk_file_path: str = "/Omnia/leads.xlsx"
 
     app_secret: str = "dev-secret-change-me"
     database_url: str = "sqlite:///./data/leads.db"
@@ -78,8 +78,8 @@ class Settings(BaseSettings):
     smtp_port: int = 465
     smtp_user: str = ""
     smtp_password: str = ""
-    smtp_from_email: str = "outreach@stenvik.studio"
-    smtp_from_name: str = "Stenvik"
+    smtp_from_email: str = "outreach@omniadevelop.com"
+    smtp_from_name: str = "Omnia"
     imap_host: str = ""
     imap_port: int = 993
     imap_user: str = ""
@@ -88,7 +88,7 @@ class Settings(BaseSettings):
     # === Telegram bot ===
     telegram_bot_token: str = ""
     telegram_webhook_secret: str = ""
-    telegram_bot_username: str = "stenvik_studio_bot"
+    telegram_bot_username: str = "omnia_develop_bot"
 
     # === SMS via smsc.ru ===
     smsc_login: str = ""

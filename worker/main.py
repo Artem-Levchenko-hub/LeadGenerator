@@ -3,7 +3,7 @@
 Запуск:
     python -m worker.main
 
-Производственный запуск через systemd-юнит `stenvik-worker.service`.
+Производственный запуск через systemd-юнит `omnia-worker.service`.
 """
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ def _safe(fn, name: str):
 
 
 def main() -> int:
-    log.info("Stenvik worker starting...")
+    log.info("Omnia worker starting...")
     sched = BlockingScheduler(timezone="UTC")
 
     # Tactical Orchestrator — каждую минуту.

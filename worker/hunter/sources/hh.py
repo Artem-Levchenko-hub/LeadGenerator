@@ -9,7 +9,7 @@
 запросов в день без проблем.
 
 Сильный ICP-сигнал: компания публикует вакансии → активно растёт → нужны
-цифровые продукты. Особенно если вакансии разработчиков — но Stenvik как раз
+цифровые продукты. Особенно если вакансии разработчиков — но Omnia как раз
 предлагает альтернативу штату ("не нанимайте — получите готовый продукт").
 """
 from __future__ import annotations
@@ -79,8 +79,8 @@ class HHEmployersSource(LeadSource):
         # HH с 2024 требует именно HH-User-Agent (формат: AppName (contact_email)).
         # Под обычным User-Agent методы возвращают 403.
         self.headers = {
-            "HH-User-Agent": "Stenvik (outreach@stenvik.studio)",
-            "User-Agent": "Stenvik/1.0",
+            "HH-User-Agent": "Omnia (outreach@omniadevelop.com)",
+            "User-Agent": "Omnia/1.0",
         }
 
     def iter_leads(self, *, limit: int = 50) -> Iterator[LeadHit]:

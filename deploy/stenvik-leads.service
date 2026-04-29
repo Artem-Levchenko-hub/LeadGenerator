@@ -1,5 +1,5 @@
 [Unit]
-Description=Stenvik Leads — веб-приложение для продажников
+Description=Omnia Develop Leads — веб-приложение для продажников
 After=network.target
 
 [Service]

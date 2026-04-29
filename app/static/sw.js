@@ -1,4 +1,4 @@
-/* Stenvik Leads — Service Worker.
+/* Omnia Leads — Service Worker.
  *
  * Стратегия:
  *   - Статика (css/js/иконки/manifest): cache-first, обновляется в фоне.
@@ -12,7 +12,7 @@
  * Версия кэша повышается при каждом деплое новой статики.
  */
 
-const CACHE_VERSION = 'stenvik-leads-v2-scandi';
+const CACHE_VERSION = 'omnia-leads-v3-scandi';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const PAGES_CACHE = `${CACHE_VERSION}-pages`;
 const VENDOR_CACHE = `${CACHE_VERSION}-vendor`;

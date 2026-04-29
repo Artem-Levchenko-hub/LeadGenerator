@@ -357,7 +357,7 @@ def _run_openai(
     if "openrouter" in (base_url or "").lower():
         # Реквизиты для OpenRouter rankings (не критично, но рекомендуется).
         extra_headers["HTTP-Referer"] = "https://lead-generator.ru"
-        extra_headers["X-Title"] = "Stenvik Agent Studio"
+        extra_headers["X-Title"] = "Omnia Agent Studio"
 
     for iter_idx in range(max_iterations):
         # Перед каждым вызовом ужимаем старые tool_results — это срезает

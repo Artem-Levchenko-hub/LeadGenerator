@@ -1,6 +1,6 @@
-# Stenvik Lead Pipeline
+# Omnia Lead Pipeline
 
-Автоматический генератор B2B-лидов для цифровой студии **Stenvik** (stenvik.studio).
+Автоматический генератор B2B-лидов для цифровой студии **Omnia** (omniadevelop.com).
 Собирает компании с HH.ru → проверяет их сайты → **Claude Sonnet 4.6** анализирует каждую
 как потенциального клиента → выдаёт продажникам таблицу с приоритетом и персональным хуком.
 
@@ -12,16 +12,16 @@
 ## 📋 Что делает
 
 1. **Берёт работодателей с HH.ru** по городам (Москва, СПб, Екб, НСК, Казань, и т.п.) через публичное API.
-2. **Отсеивает IT-компании** (у них свои разработчики, они не ICP Stenvik).
+2. **Отсеивает IT-компании** (у них свои разработчики, они не ICP Omnia).
 3. **Пытается открыть сайт** каждой компании:
    - Определяет CMS/стек (WordPress, Tilda, Bitrix, Joomla и т.п.)
    - Проверяет наличие HTTPS, заголовки, description
    - Качает ~6KB чистого текста с главной страницы
 4. **Отправляет в Claude Sonnet 4.6** всё, что знает о компании + системный промпт с описанием
-   услуг Stenvik (из `ai/prompts.py`). Claude возвращает:
+   услуг Omnia (из `ai/prompts.py`). Claude возвращает:
    - Краткую сводку о компании
    - 3-5 **конкретных болей**
-   - 1-3 **рекомендованных услуги Stenvik** из прайса
+   - 1-3 **рекомендованных услуги Omnia** из прайса
    - **Персонализированный хук** для первого звонка продажника
    - Приоритет 1-5 + обоснование
 5. **Сохраняет в SQLite**, показывает в веб-интерфейсе (FastAPI + Bootstrap).
@@ -100,7 +100,7 @@ AUTH_USERS=admin:твой-пароль,sales1:другой-пароль
 
 ```powershell
 # Тест №1: анализ одного сайта (~15 сек)
-py run.py analyze https://stenvik.studio
+py run.py analyze https://omniadevelop.com
 
 # Тест №2: поиск компании на HH + анализ
 py run.py analyze "Ромашка"
@@ -229,7 +229,7 @@ cd /opt/lead_pipeline && git pull && systemctl restart lead-pipeline
 ## 🔧 Тюнинг и кастомизация
 
 ### Плохие приоритеты / хуки
-Правь `ai/prompts.py` — там системный промпт. Описание Stenvik, ICP, правила
+Правь `ai/prompts.py` — там системный промпт. Описание Omnia, ICP, правила
 приоритизации — всё здесь. После правки запускай `py run.py analyze <url>` на
 тестовых сайтах, смотри выдачу.
 
@@ -285,4 +285,4 @@ cd /opt/lead_pipeline && git pull && systemctl restart lead-pipeline
 
 ## 📞 Контакты
 
-**Stenvik** · [stenvik.studio](https://stenvik.studio) · hello@stenvik.studio
+**Omnia** · [omniadevelop.com](https://omniadevelop.com) · hello@omniadevelop.com

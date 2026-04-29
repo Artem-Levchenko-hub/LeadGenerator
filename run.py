@@ -1,5 +1,5 @@
 """CLI для агент-режима: Claude Code /loop ищет компании через WebSearch,
-анализирует, пишет в веб-приложение Stenvik Leads.
+анализирует, пишет в веб-приложение Omnia Leads.
 
 Режимы работы (автовыбор по .env):
   REMOTE (API): если в .env есть STENVIK_API_URL + STENVIK_API_TOKEN —

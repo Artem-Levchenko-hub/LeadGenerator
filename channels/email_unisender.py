@@ -72,7 +72,7 @@ def send_email_sync(msg: models.OutboxMessage) -> dict:
     if not use_local and not settings.smtp_user:
         return {"ok": False, "error": "SMTP requires user/password for non-local provider"}
 
-    domain = (settings.smtp_from_email or "stenvik.studio").split("@")[-1]
+    domain = (settings.smtp_from_email or "omniadevelop.com").split("@")[-1]
     message_id = make_msgid(domain=domain)
 
     try:

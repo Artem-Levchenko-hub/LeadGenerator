@@ -1,4 +1,4 @@
-"""Gunicorn config для Stenvik Leads.
+"""Gunicorn config для Omnia Leads.
 
 Запуск:
     gunicorn app.main:app -c deploy/gunicorn.conf.py

@@ -1,6 +1,6 @@
-"""Stenvik agent studio worker.
+"""Omnia agent studio worker.
 
-Отдельный процесс (systemd-юнит `stenvik-worker.service`), который:
+Отдельный процесс (systemd-юнит `omnia-worker.service`), который:
 - Запускает APScheduler с тиками orchestrator/outbox.flush_due/inbox.poll
 - Берёт задачи из таблицы agent_tasks и запускает соответствующих агентов
 - Пишет лог запусков (с токенами/стоимостью) в agent_runs
