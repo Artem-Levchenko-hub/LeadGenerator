@@ -18,6 +18,7 @@ from worker import orchestrator
 from worker import dispatcher
 from worker import outbox_flush
 from worker.inbound import imap_poller
+from worker.hunter import main as hunter_main
 
 
 logging.basicConfig(
@@ -65,6 +66,13 @@ def main() -> int:
         lambda: _safe(imap_poller.poll_inbox, "inbound.imap_poll"),
         CronTrigger.from_crontab("*/5 * * * *"),
         id="imap_poll", max_instances=1, coalesce=True,
+    )
+
+    # Hunter: 2GIS — каждые 30 минут, до 5 новых лидов за тик.
+    sched.add_job(
+        lambda: _safe(lambda: hunter_main.run_one_tick(max_per_tick=5), "hunter.tick"),
+        CronTrigger.from_crontab("*/30 * * * *"),
+        id="hunter_tick", max_instances=1, coalesce=True,
     )
 
     def shutdown(signum, _frame):  # type: ignore[no-untyped-def]
