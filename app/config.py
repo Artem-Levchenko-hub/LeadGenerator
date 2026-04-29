@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     # (a) бюджет CEO не съедал бюджет outreach, (b) видеть в дашборде OpenRouter
     # сколько именно стратегических аудитов было запущено.
     ceo_openrouter_api_key: str = ""
-    ceo_model: str = "anthropic/claude-opus-4.6"
+    ceo_model: str = "anthropic/claude-opus-4.7"
 
     # HTTP(S)/SOCKS5 прокси для исходящих (Anthropic + OpenRouter).
     http_proxy_url: str = ""

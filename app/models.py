@@ -774,3 +774,29 @@ class StrategyDirective(Base):
     active_from: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     active_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     current_status: Mapped[str] = mapped_column(String(16), default="active")
+
+
+class Observation(Base):
+    """Hourly DeepSeek-наблюдатель пишет сюда снимки состояния машины.
+
+    CEO (Opus 4.7) при manual daily аудите читает 24 последних observations
+    + summary'ы — это даёт ему «память» о том как прошёл день, не только
+    последние агрегаты.
+    """
+    __tablename__ = "observations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, index=True,
+    )
+    kind: Mapped[str] = mapped_column(String(32), index=True)
+    # 'hourly_snapshot' | 'anomaly' | 'milestone' | 'cost_alert'
+    summary: Mapped[str] = mapped_column(Text)
+    # Краткий текст для CEO: 1-3 предложения о том что произошло за час.
+    payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Сырые цифры delta-метрик: новые лиды, ошибки, расход и т.д.
+    cost_usd: Mapped[float] = mapped_column(default=0.0)
+    # Сколько потратил DeepSeek-наблюдатель на этот snapshot.
+    agent_run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("agent_runs.id"), nullable=True,
+    )

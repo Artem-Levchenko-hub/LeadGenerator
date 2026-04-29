@@ -19,6 +19,7 @@ from worker import dispatcher
 from worker import outbox_flush
 from worker.inbound import imap_poller
 from worker.hunter import main as hunter_main
+from worker.agents import collector as observer_collector
 
 
 logging.basicConfig(
@@ -74,6 +75,15 @@ def main() -> int:
         lambda: _safe(lambda: hunter_main.run_one_tick(max_per_tick=10), "hunter.tick"),
         CronTrigger.from_crontab("*/20 * * * *"),
         id="hunter_tick", max_instances=1, coalesce=True,
+    )
+
+    # Observer Collector — каждый час в :05, DeepSeek пишет короткий
+    # snapshot/аномалию в `observations`. CEO (Opus 4.7) на manual daily
+    # audit'е читает 24 последних observation'а как «память дня».
+    sched.add_job(
+        lambda: _safe(observer_collector.collect_one_hour, "collector.hourly"),
+        CronTrigger.from_crontab("5 * * * *"),
+        id="observer_collector", max_instances=1, coalesce=True,
     )
 
     def shutdown(signum, _frame):  # type: ignore[no-untyped-def]
