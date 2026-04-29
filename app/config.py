@@ -18,6 +18,13 @@ class Settings(BaseSettings):
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
 
+    # Отдельный ключ для CEO/Strategic Orchestrator (Opus 4.6, daily audit).
+    # Если не задан — fallback на openrouter_api_key. Разделение нужно чтобы:
+    # (a) бюджет CEO не съедал бюджет outreach, (b) видеть в дашборде OpenRouter
+    # сколько именно стратегических аудитов было запущено.
+    ceo_openrouter_api_key: str = ""
+    ceo_model: str = "anthropic/claude-opus-4.6"
+
     # HTTP(S)/SOCKS5 прокси для исходящих (Anthropic + OpenRouter).
     http_proxy_url: str = ""
 

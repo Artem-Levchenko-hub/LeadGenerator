@@ -54,6 +54,11 @@ MODEL_PRICING = {
     "openai/gpt-5-mini":               (0.25, 2.0, 0.025, 0.025),
     "gpt-5":                           (1.25, 10.0, 0.125, 0.125),
     "gpt-5-mini":                      (0.25, 2.0, 0.025, 0.025),
+    # Anthropic via OpenRouter (используется CEO/Strategic Orchestrator).
+    "anthropic/claude-opus-4.6":       (5.0, 25.0, 0.50, 6.25),
+    "anthropic/claude-opus-4.7":       (5.0, 25.0, 0.50, 6.25),
+    "anthropic/claude-sonnet-4-6":     (3.0, 15.0, 0.30, 3.75),
+    "anthropic/claude-haiku-4-5":      (0.80, 4.0, 0.08, 1.0),
 }
 
 
