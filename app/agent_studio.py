@@ -438,6 +438,117 @@ def feed_page(request: Request, db: Session = Depends(get_db)):
     )
 
 
+# ============================================================
+# === /system-history — эволюция работы агентов ==============
+# ============================================================
+
+@router.get("/system-history", response_class=HTMLResponse)
+def system_history_page(
+    request: Request,
+    days: int = 7,
+    agent: str = "",
+    db: Session = Depends(get_db),
+):
+    """История развития системы:
+    - Сводка по дням: запуски агентов, стоимость, успех/ошибки
+    - Распределение по агентам
+    - Top-cost запуски
+    - Все strategy_proposals
+    """
+    user = _require_user(request)
+
+    since = datetime.utcnow() - timedelta(days=days)
+
+    # === Daily aggregate ===
+    runs_q = db.query(models.AgentRun).filter(models.AgentRun.started_at >= since)
+    if agent:
+        runs_q = runs_q.filter(models.AgentRun.agent_kind == agent)
+
+    daily_rows: dict[str, dict] = {}
+    for r in runs_q.all():
+        day = r.started_at.date().isoformat()
+        d = daily_rows.setdefault(day, {
+            "day": day,
+            "runs": 0, "success": 0, "failed": 0,
+            "cost": 0.0, "tokens": 0,
+            "by_agent": {},
+        })
+        d["runs"] += 1
+        if r.success: d["success"] += 1
+        else: d["failed"] += 1
+        d["cost"] += float(r.cost_usd or 0)
+        d["tokens"] += int(r.input_tokens or 0) + int(r.output_tokens or 0)
+        d["by_agent"][r.agent_kind] = d["by_agent"].get(r.agent_kind, 0) + 1
+
+    daily = sorted(daily_rows.values(), key=lambda d: d["day"], reverse=True)
+
+    # === Top-cost runs ===
+    top_cost = (
+        db.query(models.AgentRun)
+        .filter(models.AgentRun.started_at >= since)
+        .order_by(models.AgentRun.cost_usd.desc())
+        .limit(10)
+        .all()
+    )
+
+    # === Stage history aggregate ===
+    stages_q = (
+        db.query(models.StageHistory.to_stage, func.count(models.StageHistory.id))
+        .filter(models.StageHistory.changed_at >= since)
+        .group_by(models.StageHistory.to_stage)
+        .all()
+    )
+    stages_by_kind = {s: c for s, c in stages_q}
+
+    # === Strategy proposals ===
+    strat = (
+        db.query(models.StrategyProposal)
+        .order_by(models.StrategyProposal.id.desc())
+        .limit(20)
+        .all()
+    )
+
+    # === Errors (failed runs in window) ===
+    errors_count = (
+        db.query(func.count(models.AgentRun.id))
+        .filter(models.AgentRun.started_at >= since)
+        .filter(models.AgentRun.success.is_(False))
+        .scalar() or 0
+    )
+    total_count = (
+        db.query(func.count(models.AgentRun.id))
+        .filter(models.AgentRun.started_at >= since)
+        .scalar() or 0
+    )
+    total_cost = (
+        db.query(func.sum(models.AgentRun.cost_usd))
+        .filter(models.AgentRun.started_at >= since)
+        .scalar() or 0
+    )
+
+    # Список доступных agent_kind для фильтра
+    agent_kinds = [
+        k for k, in db.query(models.AgentRun.agent_kind).distinct().all() if k
+    ]
+
+    return templates.TemplateResponse(
+        request, "studio/system_history.html",
+        {
+            "user": user,
+            "days": days,
+            "filter_agent": agent,
+            "daily": daily,
+            "top_cost": top_cost,
+            "stages_by_kind": stages_by_kind,
+            "strategy_proposals": strat,
+            "errors_count": errors_count,
+            "total_count": total_count,
+            "total_cost": round(float(total_cost), 4),
+            "agent_kinds": agent_kinds,
+        },
+    )
+
+
 @router.get("/feed/items", response_class=HTMLResponse)
 def feed_items(request: Request, db: Session = Depends(get_db)):
     """HTMX-фрагмент: последние 30 событий (agent_runs + stage_history + outbox)."""
