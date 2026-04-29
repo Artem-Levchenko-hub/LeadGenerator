@@ -49,6 +49,7 @@ def gather_facts() -> dict[str, Any]:
     facts: dict[str, Any] = {
         "snapshot_at": datetime.utcnow().isoformat() + "Z",
         "settings": _settings_capabilities(),
+        "recent_commits_24h": _recent_commits(),
     }
     with SessionLocal() as db:
         facts.update({
@@ -61,6 +62,26 @@ def gather_facts() -> dict[str, Any]:
             "previous_proposals": _recent_proposals(db),
         })
     return facts
+
+
+def _recent_commits() -> list[dict[str, str]]:
+    """Последние коммиты репо за 24ч — чтобы CEO не предлагал чинить уже починенное."""
+    import subprocess
+    try:
+        out = subprocess.run(
+            ["git", "log", "--since=24 hours ago", "--pretty=format:%h|%s", "-30"],
+            capture_output=True, text=True, timeout=10, cwd=Path(__file__).resolve().parents[2],
+        )
+        if out.returncode != 0:
+            return []
+        result = []
+        for line in out.stdout.strip().splitlines():
+            if "|" in line:
+                h, s = line.split("|", 1)
+                result.append({"sha": h, "subject": s[:120]})
+        return result
+    except Exception:  # noqa: BLE001
+        return []
 
 
 def _settings_capabilities() -> dict[str, Any]:
@@ -273,6 +294,13 @@ Inbound IMAP → Sales Manager (BANT) → Discovery → Estimation → Proposal.
 Ты получаешь снимок состояния машины (facts JSON) и выдаёшь markdown-отчёт
 строго по структуре ниже. Структура — обязательная, шапку каждой секции
 не меняй (на её основе UI парсит отчёт).
+
+⚠️ ВАЖНО: смотри `recent_commits_24h` ДО того как делать рекомендации.
+Если фикс уже задеплоен в коммите за последние 24 часа — НЕ предлагай его
+снова. Метрики facts собраны на текущий момент, но fix мог уйти в прод
+несколько минут назад и просто ещё не успел повлиять на цифры. В таком
+случае пиши «починено в коммите abc123, ждём 1-3 тика чтобы увидеть
+эффект».
 
 # 🟢 Что работает
 
