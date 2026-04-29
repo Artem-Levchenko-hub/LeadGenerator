@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Outbox — Stenvik{% endblock %}
+{% block content %}
+<div class="container" style="max-width:1200px;margin:0 auto;padding:24px">
+  <h1 style="margin:0 0 8px">Outbox</h1>
+  <p style="color:#666;margin:0 0 16px">
+    Что отправится в ближайшие минуты. Ты можешь отменить любое сообщение пока оно в холодильнике.
+  </p>
+
+  {# === Holding === #}
+  <h2 style="font-size:14px;text-transform:uppercase;color:#444;margin:24px 0 8px">
+    В холодильнике / на одобрении ({{ holding | length }})
+  </h2>
+  {% for m in holding %}
+  <div style="border:1px solid #ddd;border-radius:8px;padding:14px;margin-bottom:10px;background:white">
+    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div style="font-size:13px;color:#666">
+        <strong>{{ m.channel }}</strong> → {{ m.to_address }}
+        {% if m.subject %} · "{{ m.subject[:60] }}"{% endif %}
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span style="background:{% if m.status == 'draft' %}#95a5a6{% else %}#3498db{% endif %};color:white;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">{{ m.status }}</span>
+        <span style="font-size:11px;color:#999">отправится: {{ m.send_after.strftime('%H:%M:%S') }} UTC</span>
+        <form method="post" action="/api/outbox/{{ m.id }}/cancel" style="display:inline">
+          <button type="submit" style="background:#c0392b;color:white;border:0;padding:4px 10px;border-radius:4px;font-size:12px;cursor:pointer">Отменить</button>
+        </form>
+      </div>
+    </div>
+    <pre style="white-space:pre-wrap;margin:8px 0 0;font-family:inherit;font-size:13px;background:#fafafa;padding:8px;border-radius:4px;max-height:200px;overflow-y:auto">{{ m.body_text }}</pre>
+    {% if m.audit_notes %}
+      <div style="color:#c0392b;font-size:11px;margin-top:6px">⚠ {{ m.audit_notes }}</div>
+    {% endif %}
+    {% if m.company_id %}<div style="font-size:11px;color:#999;margin-top:4px"><a href="/company/{{ m.company_id }}">→ company#{{ m.company_id }}</a></div>{% endif %}
+  </div>
+  {% else %}
+    <div style="color:#999;padding:14px;text-align:center">В очереди пусто.</div>
+  {% endfor %}
+
+  {# === Sent today === #}
+  <h2 style="font-size:14px;text-transform:uppercase;color:#444;margin:32px 0 8px">
+    Отправлено за 24ч ({{ sent_today | length }})
+  </h2>
+  <table style="width:100%;border-collapse:collapse;background:white;border:1px solid #ddd;border-radius:8px;overflow:hidden;font-size:13px">
+    <thead style="background:#f5f5f5">
+      <tr>
+        <th style="padding:8px 12px;text-align:left">Время</th>
+        <th style="padding:8px 12px;text-align:left">Канал</th>
+        <th style="padding:8px 12px;text-align:left">Получатель</th>
+        <th style="padding:8px 12px;text-align:left">Тема / Превью</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for m in sent_today %}
+      <tr style="border-top:1px solid #eee">
+        <td style="padding:6px 12px;font-family:monospace;font-size:12px">{{ m.sent_at.strftime('%m-%d %H:%M') if m.sent_at }}</td>
+        <td style="padding:6px 12px">{{ m.channel }}</td>
+        <td style="padding:6px 12px">{{ m.to_address }}</td>
+        <td style="padding:6px 12px;color:#666">{{ (m.subject or m.body_text)[:80] }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" style="padding:14px;text-align:center;color:#999">За 24ч ничего не уходило.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {# === Rejected === #}
+  <h2 style="font-size:14px;text-transform:uppercase;color:#444;margin:32px 0 8px">
+    Отклонено Auditor'ом ({{ rejected | length }})
+  </h2>
+  {% for m in rejected %}
+  <div style="border:1px solid #f5b7b1;border-radius:6px;padding:10px 12px;margin-bottom:8px;background:#fdedec">
+    <div style="font-size:12px;color:#666"><strong>{{ m.channel }}</strong> → {{ m.to_address }}</div>
+    <div style="color:#c0392b;font-size:13px;margin-top:4px">⚠ {{ m.audit_notes }}</div>
+    <pre style="white-space:pre-wrap;margin:4px 0 0;font-family:inherit;font-size:12px;color:#666">{{ m.body_text[:300] }}{% if m.body_text | length > 300 %}…{% endif %}</pre>
+  </div>
+  {% else %}
+    <div style="color:#999">Отклонённых нет.</div>
+  {% endfor %}
+</div>
+{% endblock %}

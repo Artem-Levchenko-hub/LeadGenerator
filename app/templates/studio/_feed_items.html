@@ -1,0 +1,18 @@
+{% if not items %}
+  <div style="color:#999;padding:14px;text-align:center">Событий пока нет.</div>
+{% endif %}
+{% for it in items %}
+<div style="display:flex;gap:10px;padding:8px 12px;border-bottom:1px solid #f0f0f0;align-items:flex-start">
+  <div style="font-size:18px;line-height:1;width:24px;text-align:center">{{ it.icon }}</div>
+  <div style="flex:1;min-width:0">
+    <div style="font-size:11px;color:#999;display:flex;justify-content:space-between;gap:12px">
+      <span>{{ it.kind }} · {{ it.agent or '' }}</span>
+      <span style="font-family:monospace">{{ it.ts.strftime('%H:%M:%S') if it.ts }}</span>
+    </div>
+    <div style="margin-top:2px;font-size:13px;line-height:1.4">{{ it.text }}</div>
+    {% if it.company_id %}
+      <a href="/company/{{ it.company_id }}" style="font-size:11px;color:#3498db">→ company#{{ it.company_id }}</a>
+    {% endif %}
+  </div>
+</div>
+{% endfor %}

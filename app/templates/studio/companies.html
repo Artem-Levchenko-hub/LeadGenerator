@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Компании — Stenvik{% endblock %}
+{% block content %}
+<div class="container" style="max-width:1300px;margin:0 auto;padding:24px">
+  <h1 style="margin:0 0 8px">Компании</h1>
+  <p style="color:#666;margin:0 0 16px">
+    Все компании в воронке агентной студии. Кликни на строку чтобы открыть карточку с историей.
+  </p>
+
+  {# === Воронка === #}
+  <section style="margin-bottom:20px;overflow-x:auto">
+    <div style="display:flex;gap:6px;min-width:max-content">
+      {% for stage_code in STAGE_ORDER %}
+      <a href="/companies?stage={{ stage_code }}"
+         style="display:block;padding:8px 12px;border:1px solid #ddd;border-radius:6px;
+                background:{% if filter_stage == stage_code %}#2c3e50;color:white{% else %}white;color:#333{% endif %};
+                text-decoration:none;min-width:110px;text-align:center">
+        <div style="font-size:11px;text-transform:uppercase;opacity:.7">{{ STAGE_LABELS[stage_code] }}</div>
+        <div style="font-size:20px;font-weight:700;margin-top:2px">{{ funnel.get(stage_code, 0) }}</div>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# === Фильтры === #}
+  <section style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <a href="/companies" class="btn-ghost" style="background:{% if not filter_stage and not filter_needs_human %}#2c3e50;color:white{% endif %}">
+      Все
+    </a>
+    <a href="/companies?needs_human=1" class="btn-ghost" style="background:{% if filter_needs_human %}#e67e22;color:white{% endif %}">
+      🚨 Нужен человек
+    </a>
+    {% if filter_stage %}
+      <span style="color:#666;font-size:13px">Фильтр: {{ STAGE_LABELS.get(filter_stage, filter_stage) }}</span>
+    {% endif %}
+  </section>
+
+  {# === Таблица === #}
+  <table style="width:100%;border-collapse:collapse;background:white;border:1px solid #ddd;border-radius:8px;overflow:hidden">
+    <thead style="background:#f5f5f5">
+      <tr>
+        <th style="padding:10px 12px;text-align:left;font-size:12px;text-transform:uppercase">Компания</th>
+        <th style="padding:10px 12px;text-align:left;font-size:12px;text-transform:uppercase">Город / Индустрия</th>
+        <th style="padding:10px 12px;text-align:left;font-size:12px;text-transform:uppercase">Стадия</th>
+        <th style="padding:10px 12px;text-align:right;font-size:12px;text-transform:uppercase">Изменилась</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in companies %}
+      <tr style="border-top:1px solid #eee;cursor:pointer"
+          onclick="window.location='/company/{{ c.id }}'"
+          onmouseover="this.style.background='#fafafa'" onmouseout="this.style.background=''">
+        <td style="padding:10px 12px">
+          <div style="font-weight:600">{{ c.name }}</div>
+          {% if c.website_url %}
+            <div style="font-size:12px;color:#666">{{ c.website_url }}</div>
+          {% endif %}
+          {% if c.needs_human %}
+            <span style="background:#e67e22;color:white;padding:2px 6px;border-radius:3px;font-size:11px;font-weight:600">NEEDS HUMAN</span>
+          {% endif %}
+        </td>
+        <td style="padding:10px 12px;font-size:13px;color:#555">
+          {{ c.city or '—' }} · {{ c.industry or '—' }}
+        </td>
+        <td style="padding:10px 12px">
+          <span style="background:#ecf0f1;padding:3px 8px;border-radius:4px;font-size:12px">
+            {{ STAGE_LABELS.get(c.stage, c.stage) }}
+          </span>
+        </td>
+        <td style="padding:10px 12px;text-align:right;font-family:monospace;font-size:12px;color:#999">
+          {{ c.last_stage_change_at.strftime('%m-%d %H:%M') }}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" style="padding:30px;text-align:center;color:#999">
+        Компаний {% if filter_stage %}на этой стадии{% else %}пока{% endif %} нет
+      </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

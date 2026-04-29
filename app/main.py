@@ -41,6 +41,7 @@ from app.models import (
     ProcessedLead,
     User,
 )
+from app.agent_studio import router as agent_studio_router
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +64,10 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+# Подключаем роутер агентной студии (Спринт 2):
+# /control, /companies, /company/{id}, /outbox, /feed, /api/optout и API.
+app.include_router(agent_studio_router)
 
 # Jinja helpers
 templates.env.globals["DEAL_STATUS_LABELS"] = DEAL_STATUS_LABELS

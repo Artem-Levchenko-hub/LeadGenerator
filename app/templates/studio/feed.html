@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Feed — Stenvik{% endblock %}
+{% block content %}
+<div class="container" style="max-width:1100px;margin:0 auto;padding:24px">
+  <h1 style="margin:0 0 8px">Лента работы агентов</h1>
+  <p style="color:#666;margin:0 0 16px">
+    Что делают агенты, какие касания идут, какие переходы стадий случились.
+    Обновляется каждые 3 секунды.
+  </p>
+
+  <div id="feed"
+       hx-get="/feed/items"
+       hx-trigger="load, every 3s"
+       hx-swap="innerHTML">
+    <div style="color:#999;padding:14px;text-align:center">Загрузка…</div>
+  </div>
+</div>
+{% endblock %}

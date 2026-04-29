@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Control — Stenvik{% endblock %}
+{% block content %}
+<div class="container" style="max-width:1100px;margin:0 auto;padding:24px">
+  <h1 style="margin:0 0 8px">Control Center</h1>
+  <p style="color:#666;margin:0 0 24px">
+    Глобальное состояние агентной системы. Здесь видны kill-switch, лимиты, последние запуски и расходы на LLM.
+  </p>
+
+  {# === Kill switch === #}
+  <section style="border:2px solid {% if kill_switch.state == 'running' %}#27ae60{% else %}#c0392b{% endif %};
+                  border-radius:12px;padding:16px 20px;margin-bottom:24px;
+                  background:{% if kill_switch.state == 'running' %}#eafaf1{% else %}#fdedec{% endif %}">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div>
+        <div style="font-size:12px;color:#666;text-transform:uppercase;letter-spacing:.05em">Kill switch</div>
+        <div style="font-size:22px;font-weight:700;margin-top:4px">
+          {% if kill_switch.state == 'running' %}🟢 RUNNING{% else %}🔴 {{ kill_switch.state | upper }}{% endif %}
+        </div>
+        {% if kill_switch.reason %}
+          <div style="color:#666;margin-top:4px">причина: {{ kill_switch.reason }}</div>
+        {% endif %}
+        <div style="color:#999;font-size:12px;margin-top:4px">
+          обновлено: {{ kill_switch.set_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC
+        </div>
+      </div>
+      <form method="post" action="/admin/kill-switch" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        {% if kill_switch.state == 'running' %}
+          <input type="hidden" name="state" value="paused_manual">
+          <input type="text" name="reason" placeholder="причина (опц.)" style="padding:8px 12px;border:1px solid #ccc;border-radius:6px">
+          <button type="submit" class="btn-ghost" style="background:#c0392b;color:white;font-weight:600">⏸ ПАУЗА — стоп всему</button>
+        {% else %}
+          <input type="hidden" name="state" value="running">
+          <button type="submit" class="btn-ghost" style="background:#27ae60;color:white;font-weight:600">▶ ЗАПУСТИТЬ</button>
+        {% endif %}
+      </form>
+    </div>
+  </section>
+
+  {# === Дневные лимиты === #}
+  <section style="margin-bottom:24px">
+    <h2 style="margin:0 0 12px;font-size:16px;text-transform:uppercase;letter-spacing:.05em;color:#444">
+      Лимиты на сегодня
+    </h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+      {% for q in quotas %}
+      <div style="border:1px solid #ddd;border-radius:8px;padding:14px;background:white">
+        <div style="font-size:12px;color:#666;text-transform:uppercase">{{ q.channel }}</div>
+        <div style="font-size:24px;font-weight:700;margin-top:4px">
+          {{ q.sent }} <span style="color:#aaa;font-size:14px">/ {{ q.limit }}</span>
+        </div>
+        <div style="background:#eee;height:6px;border-radius:3px;margin-top:8px;overflow:hidden">
+          <div style="background:{% if q.pct >= 90 %}#c0392b{% elif q.pct >= 70 %}#e67e22{% else %}#27ae60{% endif %};
+                      width:{{ q.pct }}%;height:100%"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# === LLM cost === #}
+  <section style="margin-bottom:24px">
+    <h2 style="margin:0 0 12px;font-size:16px;text-transform:uppercase;letter-spacing:.05em;color:#444">
+      LLM-расход за 24ч ${{ cost_total }} <span style="color:#999;font-size:14px">/ ${{ budget_usd }}</span>
+    </h2>
+    <table style="width:100%;border-collapse:collapse;background:white;border:1px solid #ddd;border-radius:8px;overflow:hidden">
+      <thead style="background:#f5f5f5">
+        <tr>
+          <th style="padding:8px 12px;text-align:left">Модель</th>
+          <th style="padding:8px 12px;text-align:right">Запуски</th>
+          <th style="padding:8px 12px;text-align:right">Cost $</th>
+          <th style="padding:8px 12px;text-align:right">Input ток.</th>
+          <th style="padding:8px 12px;text-align:right">Output ток.</th>
+          <th style="padding:8px 12px;text-align:right">Cache read</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in cost_rows %}
+        <tr style="border-top:1px solid #eee">
+          <td style="padding:8px 12px;font-family:monospace">{{ r.model or '—' }}</td>
+          <td style="padding:8px 12px;text-align:right">{{ r.runs }}</td>
+          <td style="padding:8px 12px;text-align:right">${{ '%.4f' | format(r.cost or 0) }}</td>
+          <td style="padding:8px 12px;text-align:right">{{ '{:,}'.format(r.in_t or 0) }}</td>
+          <td style="padding:8px 12px;text-align:right">{{ '{:,}'.format(r.out_t or 0) }}</td>
+          <td style="padding:8px 12px;text-align:right">{{ '{:,}'.format(r.cache_r or 0) }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" style="padding:20px;text-align:center;color:#999">Запусков агентов за 24ч пока нет</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  {# === Recent runs === #}
+  <section>
+    <h2 style="margin:0 0 12px;font-size:16px;text-transform:uppercase;letter-spacing:.05em;color:#444">
+      Последние запуски агентов
+    </h2>
+    <table style="width:100%;border-collapse:collapse;background:white;border:1px solid #ddd;border-radius:8px;overflow:hidden">
+      <thead style="background:#f5f5f5">
+        <tr>
+          <th style="padding:8px 12px;text-align:left">Время UTC</th>
+          <th style="padding:8px 12px;text-align:left">Агент</th>
+          <th style="padding:8px 12px;text-align:left">Статус</th>
+          <th style="padding:8px 12px;text-align:right">Итер.</th>
+          <th style="padding:8px 12px;text-align:right">$</th>
+          <th style="padding:8px 12px;text-align:left">Summary</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in recent_runs %}
+        <tr style="border-top:1px solid #eee">
+          <td style="padding:6px 12px;font-family:monospace;font-size:12px">
+            {{ r.started_at.strftime('%m-%d %H:%M:%S') }}
+          </td>
+          <td style="padding:6px 12px;font-weight:600">{{ r.agent_kind }}</td>
+          <td style="padding:6px 12px">
+            {% if r.success %}<span style="color:#27ae60">✓</span>{% else %}<span style="color:#c0392b">✗</span>{% endif %}
+          </td>
+          <td style="padding:6px 12px;text-align:right">{{ r.iterations }}</td>
+          <td style="padding:6px 12px;text-align:right">${{ '%.4f' | format(r.cost_usd or 0) }}</td>
+          <td style="padding:6px 12px;color:#666;font-size:13px">
+            {{ (r.summary or r.error_text or '')[:120] }}
+            {% if r.company_id %}<a href="/company/{{ r.company_id }}" style="margin-left:6px">→ company#{{ r.company_id }}</a>{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" style="padding:20px;text-align:center;color:#999">Запусков пока не было</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+{% endblock %}

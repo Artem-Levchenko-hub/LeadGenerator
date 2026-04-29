@@ -48,7 +48,11 @@
       <span class="brand-text">Stenvik Leads</span>
     </a>
     <nav class="topbar-nav">
+      <a href="/companies" class="nav-link">Компании</a>
+      <a href="/feed" class="nav-link">Лента</a>
+      <a href="/outbox" class="nav-link">Outbox</a>
       {% if user.is_admin %}
+      <a href="/control" class="nav-link" style="color:#c0392b;font-weight:600">Control</a>
       <a href="/admin/users" class="nav-link">Юзеры</a>
       <a href="/admin/stats" class="nav-link">Статистика</a>
       <a href="/admin/activity" class="nav-link">Активность</a>

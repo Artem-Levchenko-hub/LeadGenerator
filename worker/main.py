@@ -17,6 +17,7 @@ from apscheduler.triggers.cron import CronTrigger
 from worker import orchestrator
 from worker import dispatcher
 from worker import outbox_flush
+from worker.inbound import imap_poller
 
 
 logging.basicConfig(
@@ -57,6 +58,13 @@ def main() -> int:
         lambda: _safe(outbox_flush.flush_all, "outbox.flush_all"),
         CronTrigger.from_crontab("* * * * *"),
         id="outbox_flush", max_instances=1, coalesce=True,
+    )
+
+    # IMAP poll входящих — каждые 5 минут.
+    sched.add_job(
+        lambda: _safe(imap_poller.poll_inbox, "inbound.imap_poll"),
+        CronTrigger.from_crontab("*/5 * * * *"),
+        id="imap_poll", max_instances=1, coalesce=True,
     )
 
     def shutdown(signum, _frame):  # type: ignore[no-untyped-def]

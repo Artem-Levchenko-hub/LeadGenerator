@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}{{ company.name }} — Stenvik{% endblock %}
+{% block content %}
+<div class="container" style="max-width:1300px;margin:0 auto;padding:24px">
+  <a href="/companies" style="color:#666;text-decoration:none;font-size:13px">← Все компании</a>
+
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-top:8px">
+    <div>
+      <h1 style="margin:0">{{ company.name }}</h1>
+      <div style="color:#666;margin-top:4px">
+        {{ company.city or '—' }} · {{ company.industry or '—' }}
+        {% if company.website_url %} · <a href="{{ company.website_url }}" target="_blank">{{ company.website_url }}</a>{% endif %}
+      </div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:12px;text-transform:uppercase;color:#999">текущая стадия</div>
+      <div style="background:#2c3e50;color:white;padding:6px 14px;border-radius:6px;font-weight:600;margin-top:4px;display:inline-block">
+        {{ STAGE_LABELS.get(company.stage, company.stage) }}
+      </div>
+      {% if company.needs_human %}
+        <div style="margin-top:6px"><span style="background:#e67e22;color:white;padding:3px 8px;border-radius:3px;font-size:12px;font-weight:600">🚨 NEEDS HUMAN</span></div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if company.notes %}
+  <section style="margin-top:16px;background:#fff8e1;border-left:3px solid #f39c12;padding:10px 14px;border-radius:0 6px 6px 0">
+    <div style="font-size:12px;text-transform:uppercase;color:#999">notes</div>
+    <pre style="white-space:pre-wrap;margin:4px 0 0;font-family:inherit">{{ company.notes }}</pre>
+  </section>
+  {% endif %}
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px">
+    {# === Левая колонка === #}
+    <div>
+      {# Weaknesses #}
+      <h2 style="font-size:14px;text-transform:uppercase;color:#444;margin:0 0 8px">Слабые места ({{ weaknesses | length }})</h2>
+      {% for w in weaknesses %}
+      <div style="border:1px solid #ddd;border-radius:6px;padding:10px 12px;margin-bottom:8px;background:white">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:#999">
+          <span>{{ w.kind }}</span>
+          <span style="background:{% if w.severity == 'high' %}#c0392b{% elif w.severity == 'med' %}#e67e22{% else %}#95a5a6{% endif %};color:white;padding:1px 6px;border-radius:3px;font-weight:600">{{ w.severity }}</span>
+        </div>
+        <div style="margin-top:4px">{{ w.observation_text }}</div>
+        {% if w.suggested_fix %}<div style="color:#666;font-size:13px;margin-top:4px">→ {{ w.suggested_fix }}</div>{% endif %}
+        {% if w.est_impact %}<div style="color:#27ae60;font-size:12px;margin-top:4px">💰 {{ w.est_impact }}</div>{% endif %}
+      </div>
+      {% else %}
+        <div style="color:#999;font-size:13px">Слабых мест не найдено или сайт ещё не анализировался.</div>
+      {% endfor %}
+
+      {# Outbox #}
+      <h2 style="font-size:14px;text-transform:uppercase;color:#444;margin:24px 0 8px">Outbox ({{ outbox | length }})</h2>
+      {% for m in outbox %}
+      <div style="border:1px solid #ddd;border-radius:6px;padding:10px 12px;margin-bottom:8px;background:white">
+        <div style="font-size:12px;color:#999;display:flex;justify-content:space-between">
+          <span>{{ m.channel }} → {{ m.to_address }}</span>
+          <span style="background:{% if m.status == 'sent' %}#27ae60{% elif m.status in ('rejected','failed','cancelled') %}#c0392b{% else %}#3498db{% endif %};color:white;padding:1px 6px;border-radius:3px;font-weight:600">{{ m.status }}</span>
+        </div>
+        <div style="margin-top:4px;font-size:13px">{{ (m.subject or m.body_text)[:120] }}</div>
+        {% if m.audit_notes %}<div style="color:#c0392b;font-size:11px;margin-top:4px">⚠ {{ m.audit_notes }}</div>{% endif %}
+      </div>
+      {% else %}
+        <div style="color:#999;font-size:13px">Исходящих не было.</div>
+      {% endfor %}
+    </div>
+
+    {# === Правая колонка === #}
+    <div>
+      {# Stage timeline #}
+      <h2 style="font-size:14px;text-transform:uppercase;color:#444;margin:0 0 8px">Таймлайн стадий ({{ history | length }})</h2>
+      <div style="border-left:2px solid #ddd;padding-left:14px">
+        {% for h in history %}
+        <div style="margin-bottom:14px">
+          <div style="font-family:monospace;font-size:11px;color:#999">{{ h.changed_at.strftime('%Y-%m-%d %H:%M:%S') }} UTC</div>
+          <div style="font-weight:600">
+            {{ STAGE_LABELS.get(h.from_stage, h.from_stage or '—') }} → {{ STAGE_LABELS.get(h.to_stage, h.to_stage) }}
+          </div>
+          {% if h.changed_by_agent %}<div style="font-size:12px;color:#666">агент: {{ h.changed_by_agent }}</div>{% endif %}
+          {% if h.reason %}<div style="font-size:13px;color:#444;margin-top:2px">{{ h.reason }}</div>{% endif %}
+        </div>
+        {% else %}
+          <div style="color:#999;font-size:13px">История пуста.</div>
+        {% endfor %}
+      </div>
+
+      {# Conversations #}
+      <h2 style="font-size:14px;text-transform:uppercase;color:#444;margin:24px 0 8px">Диалоги ({{ conversations | length }})</h2>
+      {% for cw in conversations %}
+      <div style="border:1px solid #ddd;border-radius:6px;padding:12px;margin-bottom:12px;background:white">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:#666">
+          <span>{{ cw.conv.channel }} · state: <strong>{{ cw.conv.state }}</strong></span>
+          <span>bot msgs: {{ cw.conv.bot_messages_count }}</span>
+        </div>
+        <div style="margin-top:8px;max-height:300px;overflow-y:auto;border:1px solid #f0f0f0;border-radius:4px;padding:8px">
+          {% for m in cw.messages %}
+          <div style="padding:6px 0;border-bottom:1px dotted #eee">
+            <div style="font-size:11px;color:#999">
+              {% if m.direction == 'in' %}← <strong>{{ m.sender }}</strong>{% else %}→ <em>агент</em>{% endif %}
+              · {{ m.received_at.strftime('%m-%d %H:%M') }}
+            </div>
+            <div style="font-size:13px;white-space:pre-wrap;margin-top:2px">{{ m.body_text[:500] }}</div>
+          </div>
+          {% else %}
+            <div style="color:#999;font-size:13px">Сообщений нет.</div>
+          {% endfor %}
+        </div>
+      </div>
+      {% else %}
+        <div style="color:#999;font-size:13px">Диалогов пока не было.</div>
+      {% endfor %}
+
+      {# Agent runs #}
+      <h2 style="font-size:14px;text-transform:uppercase;color:#444;margin:24px 0 8px">Запуски агентов</h2>
+      <table style="width:100%;font-size:12px;border-collapse:collapse">
+        <tbody>
+          {% for r in runs %}
+          <tr style="border-bottom:1px solid #eee">
+            <td style="padding:4px 6px;font-family:monospace">{{ r.started_at.strftime('%m-%d %H:%M') }}</td>
+            <td style="padding:4px 6px">{{ r.agent_kind }}</td>
+            <td style="padding:4px 6px">{% if r.success %}✓{% else %}✗{% endif %}</td>
+            <td style="padding:4px 6px;text-align:right">${{ '%.4f' | format(r.cost_usd or 0) }}</td>
+            <td style="padding:4px 6px;color:#666">{{ (r.summary or r.error_text or '')[:80] }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" style="padding:8px;color:#999;text-align:center">Запусков не было</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
