@@ -23,6 +23,7 @@ paramiko>=3.5.0
 
 # === Агентная студия (worker + agents) ===
 anthropic>=0.40.0          # SDK для Claude. Уважает ANTHROPIC_BASE_URL для прокси.
+openai>=1.50.0             # SDK для OpenAI-совместимых endpoint'ов (OpenRouter, vsegpt, ...).
 apscheduler>=3.10.4        # Фоновые задачи воркера (cron-like).
 aiosmtplib>=3.0.2          # Async SMTP для UniSender отправки.
 dnspython>=2.6.1           # Проверка SPF/DKIM/MX в Outreach Agent.

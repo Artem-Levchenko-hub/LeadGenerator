@@ -2,20 +2,42 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    # === Anthropic / прокси-провайдер для агентов ===
-    # ANTHROPIC_BASE_URL заставит Anthropic SDK ходить на прокси-провайдер
-    # (sk-hub-... ключи) вместо api.anthropic.com.
+    # === LLM-провайдер для агентов ===
+    # llm_provider:
+    #   "anthropic"   — нативный Anthropic API (или Anthropic-совместимый прокси).
+    #   "openrouter"  — OpenRouter (OpenAI-формат, любая модель: deepseek, claude, gpt).
+    #   "openai"      — OpenAI-совместимый API (vsegpt.ru, proxyapi.ru/openai, ...).
+    # Auto-detect: если задан openrouter_api_key — берём openrouter; иначе anthropic.
+    llm_provider: str = ""
+
+    # Anthropic-нативный путь.
     anthropic_api_key: str = ""
     anthropic_base_url: str = ""
-    # HTTP(S)/SOCKS5 прокси для исходящих к Anthropic API. Нужен на VPS в РФ,
-    # т.к. api.anthropic.com может быть недоступен. Формат:
-    #   http://user:pass@host:port  (HTTPS-tunnel через CONNECT)
-    #   socks5://user:pass@host:port
-    # Если пусто — клиент идёт напрямую.
+
+    # OpenRouter / OpenAI-совместимый путь.
+    openrouter_api_key: str = ""
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+
+    # HTTP(S)/SOCKS5 прокси для исходящих (Anthropic + OpenRouter).
     http_proxy_url: str = ""
+
+    # Модели по ролям. Менять можно без правки кода.
+    # default — для Hunter analysis, Outreach, Sales, Discovery, Auditor.
+    # premium — для Estimation, Proposal, Strategic.
     model_default: str = "claude-sonnet-4-6"
     model_premium: str = "claude-opus-4-7"
     daily_llm_budget_usd: float = 20.0
+
+    @property
+    def effective_provider(self) -> str:
+        """Возвращает реально используемого провайдера (с авто-детектом)."""
+        if self.llm_provider:
+            return self.llm_provider.lower()
+        if self.openrouter_api_key:
+            return "openrouter"
+        if self.anthropic_api_key:
+            return "anthropic"
+        return ""
 
     # === Yandex Disk (LOCAL-режим, fallback) ===
     yandex_disk_token: str = ""

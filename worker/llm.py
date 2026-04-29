@@ -1,43 +1,62 @@
-"""Тонкая обёртка над Anthropic SDK с поддержкой:
+"""LLM-обёртка для агентов: мульти-провайдер с tool use ReAct loop.
 
-- ANTHROPIC_BASE_URL для прокси (sk-hub-... ключи).
-- Prompt caching (cache_control={'type': 'ephemeral'}) для общего префикса.
-- Запись `agent_runs` с токенами и стоимостью.
-- Tool use (ReAct-цикл) с автоматическим вызовом локальных функций-инструментов.
+Поддерживаемые провайдеры (см. settings.effective_provider):
+- "openrouter" — OpenRouter (https://openrouter.ai). Один ключ → любая модель:
+  Claude (deepseek/...), DeepSeek, GPT, Gemini, Qwen и т.д. OpenAI-формат API.
+  ⭐ Главный путь для РФ (можно оплатить картой РФ через bothub/proxyapi/etc.).
+- "anthropic" — нативный Anthropic SDK или Anthropic-совместимый прокси
+  (aihubmix.com и др.). Используется когда есть Anthropic-нативный ключ.
+- "openai" — любой OpenAI-совместимый эндпоинт (vsegpt.ru и т.п.).
 
-Используется всеми агентами (Outreach, Sales, Discovery, ...).
+Tools у нас определены в Anthropic-format (`name`, `input_schema`). При запросе
+к OpenAI-совместимому API мы конвертируем их на лету в OpenAI tool-calls и
+обратно — модель не видит разницы.
+
+Caching:
+- Anthropic native: явный cache_control={'type':'ephemeral'} → 90% экономии.
+- OpenRouter/DeepSeek: автоматический prefix caching (одинаковый префикс →
+  кэшируется). Просто отправляем общий префикс первым.
 """
 from __future__ import annotations
 
 import json
-import time
+import logging
 from datetime import datetime
 from dataclasses import dataclass, field
 from typing import Any, Callable
-
-from anthropic import Anthropic
 
 from app.config import settings
 from app.database import SessionLocal
 from app import models
 
 
-# === Цены моделей ($/MTok) — для подсчёта cost_usd. ===
-# Источник: docs.anthropic.com/en/docs/about-claude/models. Цены могут меняться;
-# при ошибке расчёта получаем приблизительное значение, не критично — для бюджета.
+log = logging.getLogger(__name__)
+
+
+# === Цены $/1M tokens (input, output, cache_read, cache_write) ===
+# Источник: docs провайдеров. Используется для записи cost_usd в agent_runs.
 MODEL_PRICING = {
-    # claude-sonnet-4-6: input $3 / output $15 / cache_read $0.30 / cache_write $3.75 per MTok
-    "claude-sonnet-4-6": (3.0, 15.0, 0.30, 3.75),
-    # claude-opus-4-7: input $15 / output $75 / cache_read $1.50 / cache_write $18.75
-    "claude-opus-4-7": (15.0, 75.0, 1.50, 18.75),
-    "claude-haiku-4-5-20251001": (0.80, 4.0, 0.08, 1.0),
+    # Anthropic native + reseller (Sonnet/Haiku/Opus)
+    "claude-sonnet-4-6":               (3.0, 15.0, 0.30, 3.75),
+    "claude-opus-4-7":                 (15.0, 75.0, 1.50, 18.75),
+    "claude-haiku-4-5":                (0.80, 4.0, 0.08, 1.0),
+    "claude-haiku-4-5-20251001":       (0.80, 4.0, 0.08, 1.0),
+    # DeepSeek
+    "deepseek/deepseek-chat":          (0.14, 0.28, 0.014, 0.014),
+    "deepseek/deepseek-chat-v3.1":     (0.14, 0.28, 0.014, 0.014),
+    "deepseek/deepseek-v3.1":          (0.14, 0.28, 0.014, 0.014),
+    "deepseek-chat":                   (0.14, 0.28, 0.014, 0.014),
+    # GPT
+    "openai/gpt-5":                    (1.25, 10.0, 0.125, 0.125),
+    "openai/gpt-5-mini":               (0.25, 2.0, 0.025, 0.025),
+    "gpt-5":                           (1.25, 10.0, 0.125, 0.125),
+    "gpt-5-mini":                      (0.25, 2.0, 0.025, 0.025),
 }
 
 
 def estimate_cost_usd(model: str, usage: dict) -> float:
-    """Возвращает приблизительную стоимость одного вызова в USD."""
     in_p, out_p, cache_read_p, cache_write_p = MODEL_PRICING.get(
-        model, (3.0, 15.0, 0.30, 3.75),  # дефолт = Sonnet
+        model, (3.0, 15.0, 0.30, 3.75),
     )
     return (
         usage.get("input_tokens", 0) * in_p / 1_000_000
@@ -47,33 +66,27 @@ def estimate_cost_usd(model: str, usage: dict) -> float:
     )
 
 
-def get_anthropic_client() -> Anthropic:
-    """Создаёт Anthropic-клиент.
+# === Конвертация Anthropic tool format → OpenAI tool format ===
 
-    - Уважает ANTHROPIC_BASE_URL (custom endpoint прокси-провайдера).
-    - Уважает HTTP_PROXY_URL (HTTPS/SOCKS5 прокси для исходящих) — нужно
-      на VPS в РФ для доступа к api.anthropic.com.
+def anthropic_tools_to_openai(tools: list[dict]) -> list[dict]:
+    """Anthropic: {name, description, input_schema}
+    OpenAI:    {type: "function", function: {name, description, parameters}}
     """
-    import httpx
-
-    kwargs: dict[str, Any] = {"api_key": settings.anthropic_api_key}
-    if settings.anthropic_base_url:
-        kwargs["base_url"] = settings.anthropic_base_url
-
-    proxy = settings.http_proxy_url.strip()
-    if proxy:
-        # httpx >= 0.28 использует параметр `proxy` (singular).
-        # Включаем поддержку SOCKS5 если в URL начинается с socks5://
-        kwargs["http_client"] = httpx.Client(
-            proxy=proxy, timeout=60.0, follow_redirects=True,
-        )
-
-    return Anthropic(**kwargs)
+    out = []
+    for t in tools:
+        out.append({
+            "type": "function",
+            "function": {
+                "name": t["name"],
+                "description": t.get("description", ""),
+                "parameters": t.get("input_schema", {"type": "object", "properties": {}}),
+            },
+        })
+    return out
 
 
 @dataclass
 class AgentRunRecord:
-    """Аккумулятор статистики одного запуска агента."""
     agent_kind: str
     task_id: int | None = None
     company_id: int | None = None
@@ -92,14 +105,13 @@ class AgentRunRecord:
     def add_usage(self, model: str, usage: dict) -> None:
         self.model = model
         self.iterations += 1
-        self.input_tokens += usage.get("input_tokens", 0) or 0
-        self.output_tokens += usage.get("output_tokens", 0) or 0
-        self.cache_read_tokens += usage.get("cache_read_input_tokens", 0) or 0
-        self.cache_write_tokens += usage.get("cache_creation_input_tokens", 0) or 0
+        self.input_tokens += int(usage.get("input_tokens", 0) or 0)
+        self.output_tokens += int(usage.get("output_tokens", 0) or 0)
+        self.cache_read_tokens += int(usage.get("cache_read_input_tokens", 0) or 0)
+        self.cache_write_tokens += int(usage.get("cache_creation_input_tokens", 0) or 0)
         self.cost_usd += estimate_cost_usd(model, usage)
 
     def persist(self) -> None:
-        """Записывает запуск в agent_runs."""
         with SessionLocal() as db:
             run = models.AgentRun(
                 agent_kind=self.agent_kind,
@@ -122,6 +134,248 @@ class AgentRunRecord:
             db.commit()
 
 
+# === HTTP-клиент с прокси ===
+
+def _httpx_client():
+    import httpx
+    kwargs: dict[str, Any] = {"timeout": 90.0}
+    if settings.http_proxy_url:
+        kwargs["proxy"] = settings.http_proxy_url
+    return httpx.Client(**kwargs)
+
+
+# === Anthropic backend (нативный) ===
+
+def _run_anthropic(
+    record: AgentRunRecord,
+    system_blocks: list[dict],
+    user_message: str,
+    tools: list[dict],
+    tool_handlers: dict[str, Callable[..., Any]],
+    model: str,
+    max_iterations: int,
+) -> bool:
+    """ReAct loop через Anthropic SDK. Возвращает finished?"""
+    from anthropic import Anthropic
+
+    kwargs: dict[str, Any] = {"api_key": settings.anthropic_api_key}
+    if settings.anthropic_base_url:
+        kwargs["base_url"] = settings.anthropic_base_url
+    if settings.http_proxy_url:
+        kwargs["http_client"] = _httpx_client()
+    client = Anthropic(**kwargs)
+
+    system = []
+    for i, block in enumerate(system_blocks):
+        if i == 0 and len(block.get("text", "")) > 1024:
+            system.append({**block, "cache_control": {"type": "ephemeral"}})
+        else:
+            system.append(block)
+
+    messages: list[dict] = [{"role": "user", "content": user_message}]
+
+    for _ in range(max_iterations):
+        resp = client.messages.create(
+            model=model, max_tokens=4096,
+            system=system, tools=tools, messages=messages,
+        )
+        usage = getattr(resp, "usage", None)
+        if usage is not None:
+            record.add_usage(model, {
+                "input_tokens": getattr(usage, "input_tokens", 0),
+                "output_tokens": getattr(usage, "output_tokens", 0),
+                "cache_read_input_tokens": getattr(usage, "cache_read_input_tokens", 0),
+                "cache_creation_input_tokens": getattr(usage, "cache_creation_input_tokens", 0),
+            })
+
+        content_blocks = list(resp.content)
+        stop_reason = getattr(resp, "stop_reason", None)
+
+        if stop_reason == "end_turn" and not any(
+            getattr(b, "type", None) == "tool_use" for b in content_blocks
+        ):
+            record.summary = "ended without finish() tool call"
+            return True
+
+        messages.append({
+            "role": "assistant",
+            "content": [
+                {"type": "text", "text": b.text} if getattr(b, "type", None) == "text"
+                else {"type": "tool_use", "id": b.id, "name": b.name, "input": b.input}
+                for b in content_blocks
+            ],
+        })
+
+        tool_results = []
+        finished = False
+        for b in content_blocks:
+            if getattr(b, "type", None) != "tool_use":
+                continue
+            handler = tool_handlers.get(b.name)
+            if handler is None:
+                tool_results.append({
+                    "type": "tool_result", "tool_use_id": b.id,
+                    "content": f"ERROR: unknown tool '{b.name}'", "is_error": True,
+                })
+                continue
+            try:
+                result = handler(**(b.input or {}))
+            except Exception as e:  # noqa: BLE001
+                tool_results.append({
+                    "type": "tool_result", "tool_use_id": b.id,
+                    "content": f"ERROR: {type(e).__name__}: {e}", "is_error": True,
+                })
+                continue
+            if b.name == "finish":
+                record.success = True
+                record.summary = (b.input or {}).get("summary", "") or str(result or "")
+                tool_results.append({"type": "tool_result", "tool_use_id": b.id, "content": "OK"})
+                finished = True
+                break
+            tool_results.append({
+                "type": "tool_result", "tool_use_id": b.id,
+                "content": str(result) if result is not None else "OK",
+            })
+
+        if finished:
+            return True
+        messages.append({"role": "user", "content": tool_results})
+
+    record.summary = record.summary or f"max_iterations ({max_iterations}) reached"
+    return False
+
+
+# === OpenAI/OpenRouter backend ===
+
+def _system_blocks_to_str(system_blocks: list[dict]) -> str:
+    """OpenAI принимает один system message — склеиваем все блоки."""
+    return "\n\n".join(b.get("text", "") for b in system_blocks if b.get("text"))
+
+
+def _run_openai(
+    record: AgentRunRecord,
+    system_blocks: list[dict],
+    user_message: str,
+    tools: list[dict],
+    tool_handlers: dict[str, Callable[..., Any]],
+    model: str,
+    max_iterations: int,
+) -> bool:
+    """ReAct loop через OpenAI-совместимый API (OpenRouter / vsegpt / etc.)."""
+    from openai import OpenAI
+
+    api_key = settings.openrouter_api_key or settings.anthropic_api_key
+    base_url = settings.openrouter_base_url
+    kwargs: dict[str, Any] = {"api_key": api_key, "base_url": base_url}
+    if settings.http_proxy_url:
+        kwargs["http_client"] = _httpx_client()
+    client = OpenAI(**kwargs)
+
+    openai_tools = anthropic_tools_to_openai(tools)
+    system_text = _system_blocks_to_str(system_blocks)
+
+    messages: list[dict] = [
+        {"role": "system", "content": system_text},
+        {"role": "user", "content": user_message},
+    ]
+
+    extra_headers = {}
+    if "openrouter" in (base_url or "").lower():
+        # Реквизиты для OpenRouter rankings (не критично, но рекомендуется).
+        extra_headers["HTTP-Referer"] = "https://lead-generator.ru"
+        extra_headers["X-Title"] = "Stenvik Agent Studio"
+
+    for _ in range(max_iterations):
+        try:
+            resp = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                tools=openai_tools,
+                max_tokens=4096,
+                extra_headers=extra_headers or None,
+            )
+        except Exception as e:  # noqa: BLE001
+            record.error_text = f"{type(e).__name__}: {e}"
+            return False
+
+        usage = getattr(resp, "usage", None)
+        if usage is not None:
+            # OpenAI: prompt_tokens, completion_tokens; cache в .prompt_tokens_details.cached_tokens (если есть)
+            cached = 0
+            details = getattr(usage, "prompt_tokens_details", None)
+            if details is not None:
+                cached = getattr(details, "cached_tokens", 0) or 0
+            record.add_usage(model, {
+                "input_tokens": (getattr(usage, "prompt_tokens", 0) or 0) - cached,
+                "output_tokens": getattr(usage, "completion_tokens", 0) or 0,
+                "cache_read_input_tokens": cached,
+            })
+
+        choice = resp.choices[0]
+        msg = choice.message
+        finish_reason = choice.finish_reason
+
+        # Записываем assistant message в историю.
+        assistant_msg: dict = {"role": "assistant"}
+        if msg.content:
+            assistant_msg["content"] = msg.content
+        if msg.tool_calls:
+            assistant_msg["tool_calls"] = [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                }
+                for tc in msg.tool_calls
+            ]
+        else:
+            assistant_msg.setdefault("content", "")
+        messages.append(assistant_msg)
+
+        # Если модель завершила без tool_call'ов
+        if finish_reason in ("stop", "length") and not msg.tool_calls:
+            record.summary = (msg.content or "").strip()[:300] or "ended without finish() tool call"
+            return True
+
+        # Исполняем tool calls
+        finished = False
+        for tc in (msg.tool_calls or []):
+            tool_name = tc.function.name
+            try:
+                tool_args = json.loads(tc.function.arguments or "{}")
+            except Exception:  # noqa: BLE001
+                tool_args = {}
+            handler = tool_handlers.get(tool_name)
+            if handler is None:
+                content = f"ERROR: unknown tool '{tool_name}'"
+            else:
+                try:
+                    result = handler(**tool_args)
+                    content = str(result) if result is not None else "OK"
+                except Exception as e:  # noqa: BLE001
+                    content = f"ERROR: {type(e).__name__}: {e}"
+
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tc.id,
+                "content": content,
+            })
+
+            if tool_name == "finish":
+                record.success = True
+                record.summary = tool_args.get("summary", "") or "finished"
+                finished = True
+                break
+
+        if finished:
+            return True
+
+    record.summary = record.summary or f"max_iterations ({max_iterations}) reached"
+    return False
+
+
+# === Публичный API ===
+
 def run_react_loop(
     agent_kind: str,
     system_blocks: list[dict],
@@ -134,137 +388,34 @@ def run_react_loop(
     task_id: int | None = None,
     company_id: int | None = None,
 ) -> AgentRunRecord:
-    """ReAct-цикл с tool use. Вызывает Anthropic API, исполняет tools локально,
-    возвращает результаты модели до тех пор, пока модель не вызовет `finish`
-    или не упрётся в max_iterations.
+    """ReAct-цикл с tool use. Авто-выбирает backend по settings.effective_provider.
 
-    `system_blocks` — список блоков system. Первый блок (общий префикс)
-    помечается cache_control для prompt caching.
-
-    `tools` — список JSON-схем tools (формат Anthropic tool use).
-    `tool_handlers[tool_name]` — Python-функция, принимает kwargs из tool_input,
-    возвращает строку (то, что увидит модель в tool_result).
-
-    Управляющий tool `finish(summary)` ОБЯЗАТЕЛЕН в `tools` — модель должна
-    закончить через него; иначе run помечается как `not_finished`.
+    `tools` — Anthropic-format ({name, description, input_schema}). Конвертация
+    в OpenAI-format происходит автоматически если backend = openai/openrouter.
     """
     model = model or settings.model_default
     max_iterations = max_iterations or settings.outreach_max_iterations
     record = AgentRunRecord(
         agent_kind=agent_kind, task_id=task_id, company_id=company_id, model=model,
     )
-    client = get_anthropic_client()
 
-    # Помечаем первый системный блок как cached prefix.
-    system = []
-    for i, block in enumerate(system_blocks):
-        if i == 0 and len(block.get("text", "")) > 1024:
-            system.append({**block, "cache_control": {"type": "ephemeral"}})
-        else:
-            system.append(block)
-
-    messages: list[dict] = [{"role": "user", "content": user_message}]
-    finished = False
-
+    provider = settings.effective_provider
     try:
-        for _ in range(max_iterations):
-            resp = client.messages.create(
-                model=model,
-                max_tokens=4096,
-                system=system,
-                tools=tools,
-                messages=messages,
+        if provider == "anthropic":
+            _run_anthropic(record, system_blocks, user_message, tools,
+                           tool_handlers, model, max_iterations)
+        elif provider in ("openrouter", "openai"):
+            _run_openai(record, system_blocks, user_message, tools,
+                        tool_handlers, model, max_iterations)
+        else:
+            record.error_text = (
+                f"no LLM provider configured (provider={provider!r}). "
+                "Set ANTHROPIC_API_KEY or OPENROUTER_API_KEY in .env."
             )
-            usage = getattr(resp, "usage", None)
-            if usage is not None:
-                record.add_usage(model, {
-                    "input_tokens": getattr(usage, "input_tokens", 0),
-                    "output_tokens": getattr(usage, "output_tokens", 0),
-                    "cache_read_input_tokens": getattr(usage, "cache_read_input_tokens", 0),
-                    "cache_creation_input_tokens": getattr(usage, "cache_creation_input_tokens", 0),
-                })
-
-            # stop_reason 'end_turn' — модель закончила говорить (но без tool — ошибка).
-            # 'tool_use' — нужно выполнить tool и вернуть результат.
-            stop_reason = getattr(resp, "stop_reason", None)
-            content_blocks = list(resp.content)
-
-            if stop_reason == "end_turn" and not any(
-                getattr(b, "type", None) == "tool_use" for b in content_blocks
-            ):
-                # Модель закончила без вызова finish — это ошибка цикла.
-                record.summary = "ended without finish() tool call"
-                break
-
-            # Записываем reply модели в messages (assistant).
-            messages.append({
-                "role": "assistant",
-                "content": [
-                    {"type": "text", "text": b.text} if getattr(b, "type", None) == "text"
-                    else {
-                        "type": "tool_use",
-                        "id": b.id,
-                        "name": b.name,
-                        "input": b.input,
-                    }
-                    for b in content_blocks
-                ],
-            })
-
-            tool_results = []
-            for b in content_blocks:
-                if getattr(b, "type", None) != "tool_use":
-                    continue
-                tool_name = b.name
-                tool_input = b.input or {}
-                handler = tool_handlers.get(tool_name)
-                if handler is None:
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": b.id,
-                        "content": f"ERROR: unknown tool '{tool_name}'",
-                        "is_error": True,
-                    })
-                    continue
-                try:
-                    result = handler(**tool_input)
-                except Exception as e:  # noqa: BLE001
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": b.id,
-                        "content": f"ERROR: {type(e).__name__}: {e}",
-                        "is_error": True,
-                    })
-                    continue
-                # finish() возвращает специальный sentinel.
-                if tool_name == "finish":
-                    record.success = True
-                    record.summary = (tool_input or {}).get("summary", "") or str(result or "")
-                    finished = True
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": b.id,
-                        "content": "OK",
-                    })
-                    break
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": b.id,
-                    "content": str(result) if result is not None else "OK",
-                })
-
-            if finished:
-                break
-
-            messages.append({"role": "user", "content": tool_results})
-
-        if not finished and not record.summary:
-            record.summary = f"max_iterations ({max_iterations}) reached"
-
     except Exception as e:  # noqa: BLE001
         record.success = False
         record.error_text = f"{type(e).__name__}: {e}"
-
+        log.exception("agent run failed (%s)", agent_kind)
     finally:
         record.persist()
 
