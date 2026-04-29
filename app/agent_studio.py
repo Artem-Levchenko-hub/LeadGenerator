@@ -162,6 +162,7 @@ def companies_page(
     request: Request,
     stage: str = "",
     needs_human: int = 0,
+    sort: str = "score",
     db: Session = Depends(get_db),
 ):
     user = _require_user(request)
@@ -170,7 +171,16 @@ def companies_page(
         q = q.filter(models.Company.stage == stage)
     if needs_human:
         q = q.filter(models.Company.needs_human.is_(True))
-    companies = q.order_by(models.Company.last_stage_change_at.desc()).limit(200).all()
+    # По умолчанию — по score DESC (горячие сверху). Параметр ?sort=time
+    # переключает на хронологию.
+    if sort == "time":
+        q = q.order_by(models.Company.last_stage_change_at.desc())
+    else:
+        q = q.order_by(
+            models.Company.score.desc(),
+            models.Company.created_at.desc(),
+        )
+    companies = q.limit(200).all()
 
     # Воронка — кол-во по стадиям
     funnel_rows = (
@@ -370,6 +380,79 @@ def api_outbox_cancel(
     log_activity(db, user.id, action="outbox_cancelled", meta={"outbox_id": outbox_id})
     db.commit()
     return RedirectResponse("/outbox", status_code=303)
+
+
+@router.post("/api/outbox/{outbox_id}/approve")
+def api_outbox_approve(
+    outbox_id: int, request: Request, db: Session = Depends(get_db),
+):
+    """Owner-одобрение драфта: сразу в холодильник без 10-минутного wait.
+
+    Auditor уже проверил (status=holding). Теперь хочешь отправить — жмёшь
+    Approve, send_after уезжает на now-1, и outbox.flush_due на ближайшем
+    тике (≤60 сек) пошлёт через SMTP.
+    """
+    user = _require_user(request)
+    msg = db.query(models.OutboxMessage).filter_by(id=outbox_id).one_or_none()
+    if not msg:
+        raise HTTPException(404, "outbox message not found")
+    if msg.status not in (models.OUTBOX_DRAFT, models.OUTBOX_HOLDING):
+        raise HTTPException(400, f"cannot approve: status={msg.status}")
+    msg.status = models.OUTBOX_HOLDING  # На случай если был draft
+    msg.send_after = datetime.utcnow() - timedelta(seconds=1)
+    msg.audit_notes = (msg.audit_notes or "") + f" | approved by user_id={user.id}"
+    db.add(msg)
+    log_activity(db, user.id, action="outbox_approved_send_now", meta={"outbox_id": outbox_id})
+    db.commit()
+    return RedirectResponse("/outbox?msg=approved", status_code=303)
+
+
+@router.post("/api/outbox/{outbox_id}/reject")
+def api_outbox_reject(
+    outbox_id: int, request: Request, db: Session = Depends(get_db),
+    reason: str = Form(""),
+):
+    """Owner отвергает драфт целиком — не попадёт в SMTP."""
+    user = _require_user(request)
+    msg = db.query(models.OutboxMessage).filter_by(id=outbox_id).one_or_none()
+    if not msg:
+        raise HTTPException(404, "outbox message not found")
+    if msg.status not in (models.OUTBOX_DRAFT, models.OUTBOX_HOLDING):
+        raise HTTPException(400, f"cannot reject: status={msg.status}")
+    msg.status = models.OUTBOX_REJECTED
+    note = f" | rejected by user_id={user.id}"
+    if reason:
+        note += f" reason={reason[:200]}"
+    msg.audit_notes = (msg.audit_notes or "") + note
+    db.add(msg)
+    log_activity(db, user.id, action="outbox_rejected_manual", meta={"outbox_id": outbox_id, "reason": reason})
+    db.commit()
+    return RedirectResponse("/outbox?msg=rejected", status_code=303)
+
+
+@router.post("/api/outbox/{outbox_id}/edit")
+def api_outbox_edit(
+    outbox_id: int, request: Request, db: Session = Depends(get_db),
+    body_text: str = Form(...), subject: str = Form(""),
+    to_address: str = Form(""),
+):
+    """Owner редактирует body / subject / to_address до отправки."""
+    user = _require_user(request)
+    msg = db.query(models.OutboxMessage).filter_by(id=outbox_id).one_or_none()
+    if not msg:
+        raise HTTPException(404, "outbox message not found")
+    if msg.status not in (models.OUTBOX_DRAFT, models.OUTBOX_HOLDING):
+        raise HTTPException(400, f"cannot edit: status={msg.status}")
+    msg.body_text = body_text
+    if subject:
+        msg.subject = subject[:300]
+    if to_address:
+        msg.to_address = to_address[:255]
+    msg.audit_notes = (msg.audit_notes or "") + f" | edited by user_id={user.id}"
+    db.add(msg)
+    log_activity(db, user.id, action="outbox_edited", meta={"outbox_id": outbox_id})
+    db.commit()
+    return RedirectResponse(f"/outbox?msg=edited&id={outbox_id}", status_code=303)
 
 
 @router.get("/admin/outbox/recall/{token}")

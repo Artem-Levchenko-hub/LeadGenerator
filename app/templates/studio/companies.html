@@ -35,10 +35,24 @@
     {% endif %}
   </section>
 
+  {# === Sort toggle === #}
+  <section style="margin-bottom:10px;display:flex;gap:8px;align-items:center;font-size:13px;color:#666">
+    Сортировка:
+    <a href="?sort=score{% if filter_stage %}&stage={{ filter_stage }}{% endif %}{% if filter_needs_human %}&needs_human=1{% endif %}"
+       style="text-decoration:none;padding:4px 10px;border-radius:4px;{% if request.query_params.get('sort','score') == 'score' %}background:#2c3e50;color:white{% else %}background:#ecf0f1;color:#333{% endif %}">
+      🔥 По score (горячие сверху)
+    </a>
+    <a href="?sort=time{% if filter_stage %}&stage={{ filter_stage }}{% endif %}{% if filter_needs_human %}&needs_human=1{% endif %}"
+       style="text-decoration:none;padding:4px 10px;border-radius:4px;{% if request.query_params.get('sort') == 'time' %}background:#2c3e50;color:white{% else %}background:#ecf0f1;color:#333{% endif %}">
+      ⏱ По времени
+    </a>
+  </section>
+
   {# === Таблица === #}
   <table style="width:100%;border-collapse:collapse;background:white;border:1px solid #ddd;border-radius:8px;overflow:hidden">
     <thead style="background:#f5f5f5">
       <tr>
+        <th style="padding:10px 12px;text-align:center;font-size:12px;text-transform:uppercase;width:60px">Score</th>
         <th style="padding:10px 12px;text-align:left;font-size:12px;text-transform:uppercase">Компания</th>
         <th style="padding:10px 12px;text-align:left;font-size:12px;text-transform:uppercase">Город / Индустрия</th>
         <th style="padding:10px 12px;text-align:left;font-size:12px;text-transform:uppercase">Стадия</th>
@@ -47,13 +61,29 @@
     </thead>
     <tbody>
       {% for c in companies %}
+      {% set score = c.score if c.score is not none else 0 %}
+      {% if score >= 70 %}{% set bg = '#c0392b' %}{% set fg = 'white' %}
+      {% elif score >= 55 %}{% set bg = '#e67e22' %}{% set fg = 'white' %}
+      {% elif score >= 40 %}{% set bg = '#f1c40f' %}{% set fg = '#333' %}
+      {% elif score > 0 %}{% set bg = '#bdc3c7' %}{% set fg = '#333' %}
+      {% else %}{% set bg = '#ecf0f1' %}{% set fg = '#999' %}
+      {% endif %}
       <tr style="border-top:1px solid #eee;cursor:pointer"
           onclick="window.location='/company/{{ c.id }}'"
           onmouseover="this.style.background='#fafafa'" onmouseout="this.style.background=''">
+        <td style="padding:10px 6px;text-align:center">
+          <span title="{{ c.score_reason or 'не оценён' }}"
+                style="display:inline-block;background:{{ bg }};color:{{ fg }};font-weight:700;font-size:14px;padding:6px 0;width:42px;border-radius:4px">
+            {% if c.score is not none %}{{ c.score }}{% else %}—{% endif %}
+          </span>
+        </td>
         <td style="padding:10px 12px">
           <div style="font-weight:600">{{ c.name }}</div>
           {% if c.website_url %}
             <div style="font-size:12px;color:#666">{{ c.website_url }}</div>
+          {% endif %}
+          {% if c.score_reason %}
+            <div style="font-size:11px;color:#888;margin-top:2px">{{ c.score_reason | truncate(70) }}</div>
           {% endif %}
           {% if c.needs_human %}
             <span style="background:#e67e22;color:white;padding:2px 6px;border-radius:3px;font-size:11px;font-weight:600">NEEDS HUMAN</span>
@@ -72,7 +102,7 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="4" style="padding:30px;text-align:center;color:#999">
+      <tr><td colspan="5" style="padding:30px;text-align:center;color:#999">
         Компаний {% if filter_stage %}на этой стадии{% else %}пока{% endif %} нет
       </td></tr>
       {% endfor %}

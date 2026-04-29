@@ -1,51 +1,120 @@
 {% extends "base.html" %}
 {% block title %}Outbox — Stenvik{% endblock %}
 {% block content %}
-<div class="container" style="max-width:1200px;margin:0 auto;padding:24px">
-  <h1 style="margin:0 0 8px">Outbox</h1>
+<div class="container" style="max-width:1100px;margin:0 auto;padding:24px">
+  <h1 style="margin:0 0 8px">Outbox — очередь твоих писем</h1>
   <p style="color:#666;margin:0 0 16px">
-    Что отправится в ближайшие минуты. Ты можешь отменить любое сообщение пока оно в холодильнике.
+    Каждый драфт — это AI-предложение. Прочитай, отредактируй если надо, нажми <b>«Одобрить и отправить»</b> или <b>«Отвергнуть»</b>.
+    Auto-flush через 10 мин ОТКЛЮЧЕН — пока ты не нажмёшь сам, письмо не уйдёт.
   </p>
 
-  {# === Holding === #}
+  {% if request.query_params.get('msg') %}
+    <div style="background:#d4edda;color:#155724;padding:10px 14px;border-radius:6px;margin-bottom:16px;border:1px solid #c3e6cb">
+      ✓ {{ request.query_params.get('msg') }}{% if request.query_params.get('id') %} (#{{ request.query_params.get('id') }}){% endif %}
+    </div>
+  {% endif %}
+
+  {# === Holding — драфты ждущие твоего решения === #}
   <h2 style="font-size:14px;text-transform:uppercase;color:#444;margin:24px 0 8px">
-    В холодильнике / на одобрении ({{ holding | length }})
+    🟡 Ждут твоего решения ({{ holding | length }})
   </h2>
+
   {% for m in holding %}
-  <div style="border:1px solid #ddd;border-radius:8px;padding:14px;margin-bottom:10px;background:white">
-    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px">
-      <div style="font-size:13px;color:#666">
-        <strong>{{ m.channel }}</strong> → {{ m.to_address }}
-        {% if m.subject %} · "{{ m.subject[:60] }}"{% endif %}
+  <div style="border:1px solid #ddd;border-radius:10px;padding:18px;margin-bottom:14px;background:white;box-shadow:0 1px 3px rgba(0,0,0,.04)">
+    {# Шапка карточки #}
+    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+      <div>
+        {% if m.company_id %}
+          <a href="/company/{{ m.company_id }}" style="font-weight:600;color:#2c3e50;text-decoration:none">
+            #{{ m.company_id }}
+          </a> ·
+        {% endif %}
+        <span style="color:#666;font-size:13px">{{ m.channel }} → <b>{{ m.to_address }}</b></span>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
-        <span style="background:{% if m.status == 'draft' %}#95a5a6{% else %}#3498db{% endif %};color:white;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">{{ m.status }}</span>
-        <span style="font-size:11px;color:#999">отправится: {{ m.send_after.strftime('%H:%M:%S') }} UTC</span>
-        <form method="post" action="/api/outbox/{{ m.id }}/cancel" style="display:inline">
-          <button type="submit" style="background:#c0392b;color:white;border:0;padding:4px 10px;border-radius:4px;font-size:12px;cursor:pointer">Отменить</button>
-        </form>
+        <span style="background:{% if m.status == 'draft' %}#95a5a6{% else %}#3498db{% endif %};color:white;padding:3px 10px;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:.5px">{{ m.status | upper }}</span>
+        <span style="font-size:11px;color:#999;font-family:monospace">⏱ {{ m.send_after.strftime('%H:%M:%S') }} UTC</span>
       </div>
     </div>
-    <pre style="white-space:pre-wrap;margin:8px 0 0;font-family:inherit;font-size:13px;background:#fafafa;padding:8px;border-radius:4px;max-height:200px;overflow-y:auto">{{ m.body_text }}</pre>
-    {% if m.audit_notes %}
-      <div style="color:#c0392b;font-size:11px;margin-top:6px">⚠ {{ m.audit_notes }}</div>
+
+    {# Subject (если есть) #}
+    {% if m.subject %}
+      <div style="font-size:14px;font-weight:600;margin-bottom:6px;color:#333">
+        ✉ {{ m.subject }}
+      </div>
     {% endif %}
-    {% if m.company_id %}<div style="font-size:11px;color:#999;margin-top:4px"><a href="/company/{{ m.company_id }}">→ company#{{ m.company_id }}</a></div>{% endif %}
+
+    {# Полное тело письма — раскрыто #}
+    <pre style="white-space:pre-wrap;margin:0;font-family:'Segoe UI',Tahoma,sans-serif;font-size:14px;line-height:1.5;background:#fafafa;padding:14px;border-radius:6px;border:1px solid #eee;color:#222;max-height:none">{{ m.body_text }}</pre>
+
+    {# Audit notes если есть warnings #}
+    {% if m.audit_notes %}
+      <div style="background:#fff3cd;color:#856404;padding:8px 12px;border-radius:5px;font-size:12px;margin-top:10px;border:1px solid #ffeaa7">
+        ⚠ Audit: {{ m.audit_notes }}
+      </div>
+    {% endif %}
+
+    {# === Actions row === #}
+    <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <form method="post" action="/api/outbox/{{ m.id }}/approve" style="display:inline" onsubmit="return confirm('Отправить через SMTP сейчас же?')">
+        <button type="submit" style="background:#27ae60;color:white;border:0;padding:9px 16px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">
+          ✓ Одобрить и отправить
+        </button>
+      </form>
+
+      <details style="display:inline-block">
+        <summary style="background:#3498db;color:white;border:0;padding:9px 16px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;list-style:none">
+          ✏ Редактировать
+        </summary>
+        <form method="post" action="/api/outbox/{{ m.id }}/edit" style="margin-top:10px;padding:14px;background:#f8f9fa;border-radius:6px;border:1px solid #dee2e6">
+          <label style="display:block;margin-bottom:8px">
+            <span style="font-size:11px;text-transform:uppercase;color:#666;display:block;margin-bottom:3px">To address</span>
+            <input type="text" name="to_address" value="{{ m.to_address }}" style="width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px">
+          </label>
+          <label style="display:block;margin-bottom:8px">
+            <span style="font-size:11px;text-transform:uppercase;color:#666;display:block;margin-bottom:3px">Subject</span>
+            <input type="text" name="subject" value="{{ m.subject or '' }}" style="width:100%;padding:6px 8px;border:1px solid #ccc;border-radius:4px;font-size:13px">
+          </label>
+          <label style="display:block;margin-bottom:10px">
+            <span style="font-size:11px;text-transform:uppercase;color:#666;display:block;margin-bottom:3px">Body</span>
+            <textarea name="body_text" rows="14" style="width:100%;padding:8px;border:1px solid #ccc;border-radius:4px;font-size:13px;font-family:inherit;line-height:1.5">{{ m.body_text }}</textarea>
+          </label>
+          <button type="submit" style="background:#2980b9;color:white;border:0;padding:8px 14px;border-radius:5px;font-size:13px;font-weight:600;cursor:pointer">
+            Сохранить изменения
+          </button>
+        </form>
+      </details>
+
+      <form method="post" action="/api/outbox/{{ m.id }}/reject" style="display:inline" onsubmit="return confirm('Отвергнуть полностью? Письмо не уйдёт.')">
+        <button type="submit" style="background:#c0392b;color:white;border:0;padding:9px 16px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">
+          ✗ Отвергнуть
+        </button>
+      </form>
+
+      <form method="post" action="/api/outbox/{{ m.id }}/cancel" style="display:inline;margin-left:auto">
+        <button type="submit" style="background:transparent;color:#999;border:1px solid #ddd;padding:9px 14px;border-radius:6px;font-size:12px;cursor:pointer">
+          Отозвать (cancelled)
+        </button>
+      </form>
+    </div>
   </div>
   {% else %}
-    <div style="color:#999;padding:14px;text-align:center">В очереди пусто.</div>
+    <div style="color:#999;padding:24px;text-align:center;background:#f8f9fa;border-radius:8px">
+      Очередь пуста. Hunter + scorer + Outreach-агент готовят следующих кандидатов — заходи позже.
+    </div>
   {% endfor %}
 
   {# === Sent today === #}
+  {% if sent_today %}
   <h2 style="font-size:14px;text-transform:uppercase;color:#444;margin:32px 0 8px">
-    Отправлено за 24ч ({{ sent_today | length }})
+    🟢 Отправлено за 24ч ({{ sent_today | length }})
   </h2>
   <table style="width:100%;border-collapse:collapse;background:white;border:1px solid #ddd;border-radius:8px;overflow:hidden;font-size:13px">
     <thead style="background:#f5f5f5">
       <tr>
         <th style="padding:8px 12px;text-align:left">Время</th>
         <th style="padding:8px 12px;text-align:left">Канал</th>
-        <th style="padding:8px 12px;text-align:left">Получатель</th>
+        <th style="padding:8px 12px;text-align:left">Кому</th>
         <th style="padding:8px 12px;text-align:left">Тема / Превью</th>
       </tr>
     </thead>
@@ -55,26 +124,34 @@
         <td style="padding:6px 12px;font-family:monospace;font-size:12px">{{ m.sent_at.strftime('%m-%d %H:%M') if m.sent_at }}</td>
         <td style="padding:6px 12px">{{ m.channel }}</td>
         <td style="padding:6px 12px">{{ m.to_address }}</td>
-        <td style="padding:6px 12px;color:#666">{{ (m.subject or m.body_text)[:80] }}</td>
+        <td style="padding:6px 12px;color:#666">
+          {% if m.company_id %}<a href="/company/{{ m.company_id }}" style="color:#2980b9;text-decoration:none">#{{ m.company_id }}</a> · {% endif %}
+          {{ (m.subject or m.body_text)[:80] }}
+        </td>
       </tr>
-      {% else %}
-      <tr><td colspan="4" style="padding:14px;text-align:center;color:#999">За 24ч ничего не уходило.</td></tr>
       {% endfor %}
     </tbody>
   </table>
+  {% endif %}
 
   {# === Rejected === #}
+  {% if rejected %}
   <h2 style="font-size:14px;text-transform:uppercase;color:#444;margin:32px 0 8px">
-    Отклонено Auditor'ом ({{ rejected | length }})
+    🔴 Отклонено Auditor'ом / тобой ({{ rejected | length }})
   </h2>
   {% for m in rejected %}
   <div style="border:1px solid #f5b7b1;border-radius:6px;padding:10px 12px;margin-bottom:8px;background:#fdedec">
-    <div style="font-size:12px;color:#666"><strong>{{ m.channel }}</strong> → {{ m.to_address }}</div>
+    <div style="font-size:12px;color:#666;display:flex;justify-content:space-between">
+      <span>
+        {% if m.company_id %}<a href="/company/{{ m.company_id }}" style="color:#2980b9;text-decoration:none">#{{ m.company_id }}</a> · {% endif %}
+        <strong>{{ m.channel }}</strong> → {{ m.to_address }}
+      </span>
+      <span style="font-family:monospace">{{ m.created_at.strftime('%m-%d %H:%M') if m.created_at }}</span>
+    </div>
     <div style="color:#c0392b;font-size:13px;margin-top:4px">⚠ {{ m.audit_notes }}</div>
-    <pre style="white-space:pre-wrap;margin:4px 0 0;font-family:inherit;font-size:12px;color:#666">{{ m.body_text[:300] }}{% if m.body_text | length > 300 %}…{% endif %}</pre>
+    <pre style="white-space:pre-wrap;margin:6px 0 0;font-family:inherit;font-size:12px;color:#666;background:white;padding:6px 8px;border-radius:4px">{{ m.body_text[:400] }}{% if m.body_text | length > 400 %}…{% endif %}</pre>
   </div>
-  {% else %}
-    <div style="color:#999">Отклонённых нет.</div>
   {% endfor %}
+  {% endif %}
 </div>
 {% endblock %}
