@@ -113,7 +113,7 @@ def dispatch(max_concurrent: int = 5, batch_size: int = 10) -> dict:
 # === Регистрация handlers (импорты вынесены сюда чтобы избежать циклов) ===
 
 def _register_default_handlers() -> None:
-    from worker.agents import outreach  # noqa: PLC0415
+    from worker.agents import outreach, sales  # noqa: PLC0415
 
     def _h_first_touch(*, company_id: int, task_id: int | None = None, **_: object) -> dict:
         return outreach.run_first_touch(company_id=company_id, task_id=task_id)
@@ -126,8 +126,17 @@ def _register_default_handlers() -> None:
             conversation_id=conversation_id, company_id=company_id, task_id=task_id,
         )
 
+    def _h_sales(
+        *, conversation_id: int, company_id: int | None = None,
+        task_id: int | None = None, **_: object,
+    ) -> dict:
+        return sales.run_sales_qualification(
+            conversation_id=conversation_id, company_id=company_id, task_id=task_id,
+        )
+
     register(models.TASK_OUTREACH_FIRST, _h_first_touch)
     register(models.TASK_OUTREACH_CONT, _h_continue)
+    register(models.TASK_SALES_CONT, _h_sales)
 
 
 _register_default_handlers()

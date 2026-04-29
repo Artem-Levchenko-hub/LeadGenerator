@@ -64,6 +64,105 @@ def _get_kill_switch(db: Session) -> models.KillSwitch:
 # === /control — командный центр =============================
 # ============================================================
 
+@router.get("/pipeline", response_class=HTMLResponse)
+def pipeline_page(request: Request, db: Session = Depends(get_db)):
+    """Визуальный pipeline: все стадии с live counts, n8n-style flow."""
+    user = _require_user(request)
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday = datetime.utcnow() - timedelta(hours=24)
+
+    # Stage 1: Hunter
+    hunter_total = db.query(models.Company).count()
+    hunter_24h = db.query(models.Company).filter(models.Company.created_at >= yesterday).count()
+    hunter_runs_24h = db.query(models.RunLog).filter(models.RunLog.started_at >= yesterday).count()
+
+    # Stage 2: Scorer / Enrichment
+    scored = db.query(models.Company).filter(models.Company.score.isnot(None)).count()
+    with_site = db.query(models.Company).filter(models.Company.website_url.isnot(None)).count()
+    hot = db.query(models.Company).filter(models.Company.score >= settings.score_threshold).count()
+    very_hot = db.query(models.Company).filter(models.Company.score >= 70).count()
+
+    # Stage 3: Outreach
+    in_outreach = (
+        db.query(models.AgentTask)
+        .filter(models.AgentTask.kind == models.TASK_OUTREACH_FIRST)
+        .filter(models.AgentTask.status.in_(("pending", "running")))
+        .count()
+    )
+    outreach_today = (
+        db.query(models.AgentRun)
+        .filter(models.AgentRun.agent_kind == "outreach")
+        .filter(models.AgentRun.started_at >= today_start)
+        .count()
+    )
+    outreach_cost_today = (
+        db.query(func.coalesce(func.sum(models.AgentRun.cost_usd), 0))
+        .filter(models.AgentRun.agent_kind == "outreach")
+        .filter(models.AgentRun.started_at >= today_start)
+        .scalar()
+    )
+
+    # Stage 4: Outbox
+    outbox_holding = db.query(models.OutboxMessage).filter_by(status=models.OUTBOX_HOLDING).count()
+    outbox_sent_today = (
+        db.query(models.OutboxMessage)
+        .filter(models.OutboxMessage.status == models.OUTBOX_SENT)
+        .filter(models.OutboxMessage.sent_at >= today_start)
+        .count()
+    )
+    outbox_failed = db.query(models.OutboxMessage).filter_by(status=models.OUTBOX_FAILED).count()
+    outbox_rejected = db.query(models.OutboxMessage).filter_by(status=models.OUTBOX_REJECTED).count()
+
+    # Stage 5: Conversations
+    conv_engaged = db.query(models.Conversation).filter_by(state=models.CONV_ENGAGED).count()
+    conv_qualifying = db.query(models.Conversation).filter_by(state=models.CONV_QUALIFYING).count()
+    conv_ready = db.query(models.Conversation).filter_by(state=models.CONV_READY_FOR_PROPOSAL).count()
+    conv_won = db.query(models.Conversation).filter_by(state=models.CONV_WON).count()
+    conv_lost = db.query(models.Conversation).filter_by(state=models.CONV_LOST).count()
+
+    # Sales runs
+    sales_today = (
+        db.query(models.AgentRun)
+        .filter(models.AgentRun.agent_kind == "sales")
+        .filter(models.AgentRun.started_at >= today_start)
+        .count()
+    )
+
+    # Total cost today
+    total_cost_today = (
+        db.query(func.coalesce(func.sum(models.AgentRun.cost_usd), 0))
+        .filter(models.AgentRun.started_at >= today_start)
+        .scalar()
+    )
+
+    # Settings overview
+    cfg = {
+        "auto_outreach": settings.auto_outreach_enabled,
+        "daily_quota": settings.daily_outreach_quota,
+        "score_threshold": settings.score_threshold,
+        "max_iter": settings.outreach_max_iterations,
+        "smtp_configured": bool(settings.smtp_host and settings.smtp_password),
+        "kill_switch_state": _get_kill_switch(db).state,
+    }
+
+    return templates.TemplateResponse(
+        request, "studio/pipeline.html",
+        {
+            "user": user,
+            "stages": {
+                "hunter": {"total": hunter_total, "added_24h": hunter_24h, "runs_24h": hunter_runs_24h},
+                "scorer": {"scored": scored, "with_site": with_site, "hot": hot, "very_hot": very_hot},
+                "outreach": {"in_flight": in_outreach, "today": outreach_today, "cost_today": float(outreach_cost_today or 0)},
+                "outbox": {"holding": outbox_holding, "sent_today": outbox_sent_today, "failed": outbox_failed, "rejected": outbox_rejected},
+                "sales": {"engaged": conv_engaged, "qualifying": conv_qualifying, "ready": conv_ready, "won": conv_won, "lost": conv_lost, "today_runs": sales_today},
+            },
+            "cfg": cfg,
+            "total_cost_today_usd": round(float(total_cost_today or 0), 4),
+            "total_cost_today_rub": round(float(total_cost_today or 0) * 92, 2),
+        },
+    )
+
+
 @router.get("/control", response_class=HTMLResponse)
 def control_page(request: Request, db: Session = Depends(get_db)):
     user = _require_admin(request)

@@ -126,9 +126,10 @@ def tick() -> dict:
                     enqueue(db, kind=models.TASK_OUTREACH_FIRST, company_id=c.id)
                     enq_first += 1
 
-        # 2) Новые входящие → outreach.continue
-        # Идея: для каждого conversation, у которого last_inbound_at > last_outbound_at
-        # и нет открытой задачи outreach.continue → ставим её.
+        # 2) Новые входящие → continue. Routing по conversation.state:
+        #    - new → outreach.continue (Outreach Agent решает: engaged / lost)
+        #    - engaged | qualifying → sales.continue (Sales Manager Agent BANT)
+        #    - ready_for_proposal → пока escalate_to_human (Discovery/Proposal спринты не реализованы)
         convs = (
             db.query(models.Conversation)
             .filter(models.Conversation.state.in_((
@@ -145,9 +146,13 @@ def tick() -> dict:
                 continue
             if not conv.last_inbound_at:
                 continue
-            # Проверка наличия открытой continue-задачи для этого conv
+            # Routing по state
+            if conv.state == models.CONV_NEW:
+                next_kind = models.TASK_OUTREACH_CONT
+            else:  # engaged | qualifying
+                next_kind = models.TASK_SALES_CONT
             already = db.query(exists().where(and_(
-                models.AgentTask.kind == models.TASK_OUTREACH_CONT,
+                models.AgentTask.kind == next_kind,
                 models.AgentTask.conversation_id == conv.id,
                 models.AgentTask.status.in_(("pending", "running")),
             ))).scalar()
@@ -155,7 +160,7 @@ def tick() -> dict:
                 continue
             enqueue(
                 db,
-                kind=models.TASK_OUTREACH_CONT,
+                kind=next_kind,
                 company_id=conv.company_id,
                 conversation_id=conv.id,
             )

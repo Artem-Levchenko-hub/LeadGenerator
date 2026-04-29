@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Pipeline — Stenvik{% endblock %}
+{% block content %}
+<div class="container" style="max-width:1400px;margin:0 auto;padding:24px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+    <div>
+      <h1 style="margin:0">📊 Pipeline — что происходит в машине</h1>
+      <p style="color:#666;margin:6px 0 0">Все стадии воронки с живыми счётчиками. Автообновление каждые 30 сек.</p>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:11px;text-transform:uppercase;color:#999">Стоимость сегодня</div>
+      <div style="font-size:24px;font-weight:700;color:#27ae60">${{ total_cost_today_usd }}</div>
+      <div style="font-size:13px;color:#666">≈ ₽{{ total_cost_today_rub }}</div>
+    </div>
+  </div>
+
+  {# Status row — config flags #}
+  <section style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;padding:12px;background:#f8f9fa;border-radius:8px;font-size:13px">
+    <span style="padding:4px 10px;border-radius:4px;background:{% if cfg.kill_switch_state == 'running' %}#27ae60{% else %}#e67e22{% endif %};color:white;font-weight:600">
+      kill_switch: {{ cfg.kill_switch_state }}
+    </span>
+    <span style="padding:4px 10px;border-radius:4px;background:{% if cfg.auto_outreach %}#27ae60{% else %}#7f8c8d{% endif %};color:white">
+      auto_outreach: {{ 'on' if cfg.auto_outreach else 'off' }}
+    </span>
+    <span style="padding:4px 10px;border-radius:4px;background:#34495e;color:white">
+      quota: {{ cfg.daily_quota }}/день
+    </span>
+    <span style="padding:4px 10px;border-radius:4px;background:#34495e;color:white">
+      score≥{{ cfg.score_threshold }}
+    </span>
+    <span style="padding:4px 10px;border-radius:4px;background:#34495e;color:white">
+      max_iter: {{ cfg.max_iter }}
+    </span>
+    <span style="padding:4px 10px;border-radius:4px;background:{% if cfg.smtp_configured %}#27ae60{% else %}#c0392b{% endif %};color:white">
+      SMTP: {{ '✓' if cfg.smtp_configured else '✗ не настроен' }}
+    </span>
+    <a href="/control" style="padding:4px 10px;border-radius:4px;background:#3498db;color:white;text-decoration:none;margin-left:auto">⚙ Настройки →</a>
+  </section>
+
+  {# Pipeline flow — большие карточки со стрелками #}
+  <div style="display:grid;grid-template-columns:repeat(5, 1fr);gap:8px;align-items:stretch">
+    {# Stage 1: Hunter #}
+    <div style="background:white;border:1px solid #ddd;border-radius:10px;padding:16px;position:relative">
+      <div style="font-size:11px;text-transform:uppercase;color:#3498db;font-weight:700;letter-spacing:.5px">🎯 Stage 1 · Hunter</div>
+      <div style="font-size:36px;font-weight:700;color:#2c3e50;margin:8px 0 4px">{{ stages.hunter.total }}</div>
+      <div style="color:#666;font-size:13px">всего лидов в БД</div>
+      <hr style="margin:12px 0;border:0;border-top:1px solid #eee">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#666;margin-bottom:4px">
+        <span>+24ч</span><b>{{ stages.hunter.added_24h }}</b>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#666">
+        <span>тиков 24ч</span><b>{{ stages.hunter.runs_24h }}</b>
+      </div>
+      <div style="position:absolute;right:-16px;top:50%;transform:translateY(-50%);background:#3498db;color:white;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;z-index:2">▶</div>
+    </div>
+
+    {# Stage 2: Scorer #}
+    <div style="background:white;border:1px solid #ddd;border-radius:10px;padding:16px;position:relative">
+      <div style="font-size:11px;text-transform:uppercase;color:#9b59b6;font-weight:700;letter-spacing:.5px">⚖ Stage 2 · Scorer</div>
+      <div style="font-size:36px;font-weight:700;color:#2c3e50;margin:8px 0 4px">{{ stages.scorer.hot }}</div>
+      <div style="color:#666;font-size:13px">горячих (score ≥ {{ cfg.score_threshold }})</div>
+      <hr style="margin:12px 0;border:0;border-top:1px solid #eee">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#666;margin-bottom:4px">
+        <span>🔥 score ≥ 70</span><b style="color:#c0392b">{{ stages.scorer.very_hot }}</b>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#666;margin-bottom:4px">
+        <span>проскорено</span><b>{{ stages.scorer.scored }}</b>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#666">
+        <span>с сайтом</span><b>{{ stages.scorer.with_site }}</b>
+      </div>
+      <div style="position:absolute;right:-16px;top:50%;transform:translateY(-50%);background:#9b59b6;color:white;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;z-index:2">▶</div>
+    </div>
+
+    {# Stage 3: Outreach #}
+    <div style="background:white;border:1px solid #ddd;border-radius:10px;padding:16px;position:relative">
+      <div style="font-size:11px;text-transform:uppercase;color:#27ae60;font-weight:700;letter-spacing:.5px">🤖 Stage 3 · Outreach</div>
+      <div style="font-size:36px;font-weight:700;color:#2c3e50;margin:8px 0 4px">{{ stages.outreach.today }}</div>
+      <div style="color:#666;font-size:13px">драфтов сегодня (квота {{ cfg.daily_quota }})</div>
+      <hr style="margin:12px 0;border:0;border-top:1px solid #eee">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#666;margin-bottom:4px">
+        <span>в очереди</span><b style="color:#f39c12">{{ stages.outreach.in_flight }}</b>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#666">
+        <span>cost сегодня</span><b>${{ '%.4f'|format(stages.outreach.cost_today) }}</b>
+      </div>
+      <div style="position:absolute;right:-16px;top:50%;transform:translateY(-50%);background:#27ae60;color:white;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;z-index:2">▶</div>
+    </div>
+
+    {# Stage 4: Outbox #}
+    <a href="/outbox" style="text-decoration:none;color:inherit">
+    <div style="background:white;border:1px solid #ddd;border-radius:10px;padding:16px;position:relative;cursor:pointer">
+      <div style="font-size:11px;text-transform:uppercase;color:#f39c12;font-weight:700;letter-spacing:.5px">📨 Stage 4 · Outbox</div>
+      <div style="font-size:36px;font-weight:700;color:#2c3e50;margin:8px 0 4px">{{ stages.outbox.holding }}</div>
+      <div style="color:#666;font-size:13px">ждут твоего одобрения →</div>
+      <hr style="margin:12px 0;border:0;border-top:1px solid #eee">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#666;margin-bottom:4px">
+        <span>отправлено сегодня</span><b style="color:#27ae60">{{ stages.outbox.sent_today }}</b>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#666;margin-bottom:4px">
+        <span>failed (SMTP)</span><b style="color:#c0392b">{{ stages.outbox.failed }}</b>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#666">
+        <span>rejected (Auditor)</span><b style="color:#e74c3c">{{ stages.outbox.rejected }}</b>
+      </div>
+      <div style="position:absolute;right:-16px;top:50%;transform:translateY(-50%);background:#f39c12;color:white;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;z-index:2">▶</div>
+    </div>
+    </a>
+
+    {# Stage 5: Sales / Conversations #}
+    <div style="background:white;border:1px solid #ddd;border-radius:10px;padding:16px">
+      <div style="font-size:11px;text-transform:uppercase;color:#e74c3c;font-weight:700;letter-spacing:.5px">💬 Stage 5 · Sales</div>
+      <div style="font-size:36px;font-weight:700;color:#2c3e50;margin:8px 0 4px">{{ stages.sales.engaged + stages.sales.qualifying }}</div>
+      <div style="color:#666;font-size:13px">активных диалогов</div>
+      <hr style="margin:12px 0;border:0;border-top:1px solid #eee">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#666;margin-bottom:4px">
+        <span>engaged</span><b>{{ stages.sales.engaged }}</b>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#666;margin-bottom:4px">
+        <span>qualifying</span><b>{{ stages.sales.qualifying }}</b>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#666;margin-bottom:4px">
+        <span>🏆 ready / won</span><b style="color:#27ae60">{{ stages.sales.ready + stages.sales.won }}</b>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#666">
+        <span>lost</span><b style="color:#7f8c8d">{{ stages.sales.lost }}</b>
+      </div>
+    </div>
+  </div>
+
+  {# Conversion explainer #}
+  <div style="margin-top:30px;padding:18px;background:linear-gradient(90deg,#3498db15 0%,#9b59b615 25%,#27ae6015 50%,#f39c1215 75%,#e74c3c15 100%);border-radius:10px">
+    <h3 style="margin:0 0 10px;font-size:14px;text-transform:uppercase;color:#444">Конверсия по этапам</h3>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:13px">
+      <span><b>{{ stages.hunter.total }}</b> найдено</span>
+      <span style="color:#999">→</span>
+      <span><b>{{ stages.scorer.hot }}</b> горячих ({{ '%.0f'|format(stages.scorer.hot / stages.hunter.total * 100 if stages.hunter.total else 0) }}%)</span>
+      <span style="color:#999">→</span>
+      <span><b>{{ stages.outreach.today }}</b> драфтов сегодня</span>
+      <span style="color:#999">→</span>
+      <span><b>{{ stages.outbox.sent_today }}</b> отправлено</span>
+      <span style="color:#999">→</span>
+      <span><b>{{ stages.sales.engaged + stages.sales.qualifying + stages.sales.ready + stages.sales.won }}</b> активных диалогов</span>
+      <span style="color:#999">→</span>
+      <span><b style="color:#27ae60">{{ stages.sales.won }}</b> won</span>
+    </div>
+  </div>
+
+  {# Quick actions #}
+  <section style="margin-top:24px;display:flex;gap:8px;flex-wrap:wrap">
+    <a href="/companies" style="padding:8px 14px;background:#34495e;color:white;border-radius:5px;text-decoration:none;font-size:13px">→ /companies (топ по score)</a>
+    <a href="/outbox" style="padding:8px 14px;background:#27ae60;color:white;border-radius:5px;text-decoration:none;font-size:13px">→ /outbox (одобрить драфты)</a>
+    <a href="/feed" style="padding:8px 14px;background:#3498db;color:white;border-radius:5px;text-decoration:none;font-size:13px">→ /feed (live)</a>
+    <a href="/system-history" style="padding:8px 14px;background:#9b59b6;color:white;border-radius:5px;text-decoration:none;font-size:13px">→ /system-history (метрики)</a>
+    <a href="/control" style="padding:8px 14px;background:#e67e22;color:white;border-radius:5px;text-decoration:none;font-size:13px">→ /control (настройки)</a>
+  </section>
+</div>
+
+{# Auto-refresh каждые 30 секунд #}
+<script>setTimeout(()=>location.reload(), 30000);</script>
+{% endblock %}
