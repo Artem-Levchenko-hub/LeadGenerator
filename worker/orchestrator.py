@@ -87,13 +87,21 @@ def tick() -> dict:
             quota_left = max(0, _settings.daily_outreach_quota - today_count)
             if quota_left > 0:
                 # Берём топ по score — реально горячих лидов сначала.
-                # Исключаем компании на которых УЖЕ был first_touch (любой
-                # статус) — повторное касание = впустую жгём токены на тех
-                # же лидах. Это была главная причина 691 run'ов на 22
-                # компаниях в проде до этого фикса.
-                touched_subq = (
+                # Исключаем компании, на которые мы РЕАЛЬНО отправили
+                # email (OutboxMessage.status='sent') — это значит лид
+                # уже получил наше касание. Старые failed/rejected
+                # драфты (SMTP не сконфижен / Auditor отрезал) НЕ
+                # считаются реальным касанием — можно перепопробовать.
+                # Также skip если есть открытая (pending/running) задача
+                # first_touch — иначе dispatcher запустит Outreach дважды.
+                already_sent_subq = (
+                    select(models.OutboxMessage.company_id)
+                    .where(models.OutboxMessage.status == models.OUTBOX_SENT)
+                )
+                in_flight_subq = (
                     select(models.AgentTask.company_id)
                     .where(models.AgentTask.kind == models.TASK_OUTREACH_FIRST)
+                    .where(models.AgentTask.status.in_(("pending", "running")))
                 )
                 prospects = (
                     db.query(models.Company)
@@ -103,7 +111,8 @@ def tick() -> dict:
                         (models.Company.score.is_(None))
                         | (models.Company.score >= _settings.score_threshold)
                     )
-                    .filter(not_(models.Company.id.in_(touched_subq)))
+                    .filter(not_(models.Company.id.in_(already_sent_subq)))
+                    .filter(not_(models.Company.id.in_(in_flight_subq)))
                     .order_by(models.Company.score.desc())
                     .limit(quota_left)
                     .all()
