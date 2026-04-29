@@ -2,12 +2,16 @@
 
 Бесплатный тариф API возвращает: name, address, adm_div (город/район),
 rubrics, attribute_groups (теги услуг). Контакты (сайт/email/телефон) —
-платно, поэтому сайт мы будем потом искать через Outreach Agent fetch_site
-по адресу 2GIS-карточки.
+платно через API, но публичная страница 2gis.ru/firm/{id} рендерит их в
+встроенный SSR-JSON. После search-запроса мы обогащаем каждый item через
+worker.hunter.enrichment.enrich_firm — это даёт реальный сайт компании
+для Outreach Agent.
 
 Стратегия:
 - Перебираем (категория × город) парами из settings.
-- Берём первую страницу page_size=20 на каждую пару (хватит на 1 тик).
+- Берём первую страницу page_size=10 на каждую пару (хватит на 1 тик,
+  free-tier не даёт больше).
+- Для каждого попавшегося item — обогащаем (сайт/телефон/email).
 - Дедуп по 2gis item.id.
 - Не сохраняем компании на которые уже есть Company.lead_id связь.
 
@@ -16,11 +20,13 @@ rubrics, attribute_groups (теги услуг). Контакты (сайт/emai
 from __future__ import annotations
 
 import logging
+import time
 from typing import Iterable, Iterator
 
 import httpx
 
 from app.config import settings
+from worker.hunter.enrichment import enrich_firm
 from worker.hunter.sources.base import LeadHit, LeadSource
 
 
@@ -42,10 +48,14 @@ class TwoGISSource(LeadSource):
         api_key: str | None = None,
         cities: list[str] | None = None,
         categories: list[str] | None = None,
+        enrich: bool = True,
+        enrich_sleep_seconds: float = 0.5,
     ):
         self.api_key = api_key or settings.twogis_api_key
         self.cities = cities or settings.twogis_cities_list
         self.categories = categories or settings.twogis_categories_list
+        self.enrich = enrich
+        self.enrich_sleep_seconds = enrich_sleep_seconds
 
     def iter_leads(self, *, limit: int = 50) -> Iterator[LeadHit]:
         if not self.api_key:
@@ -71,8 +81,26 @@ class TwoGISSource(LeadSource):
                     return
                 hit = self._item_to_hit(item, category, city)
                 if hit:
+                    if self.enrich:
+                        self._enrich_in_place(hit)
+                        if self.enrich_sleep_seconds > 0:
+                            time.sleep(self.enrich_sleep_seconds)
                     yield hit
                     emitted += 1
+
+    def _enrich_in_place(self, hit: LeadHit) -> None:
+        """Дотягиваем сайт/телефон/email из публичной 2gis.ru/firm/{id}."""
+        if not hit.source_id:
+            return
+        contacts = enrich_firm(hit.source_id)
+        if not contacts:
+            return
+        if contacts.website and not hit.website_url:
+            hit.website_url = contacts.website
+        if contacts.phone and not hit.phone:
+            hit.phone = contacts.phone
+        if contacts.email and not hit.email:
+            hit.email = contacts.email
 
     def _search_page(self, category: str, city: str, page_size: int) -> list[dict]:
         params = {
