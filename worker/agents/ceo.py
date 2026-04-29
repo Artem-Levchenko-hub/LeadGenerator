@@ -342,44 +342,72 @@ def _build_user_message(facts: dict[str, Any]) -> str:
 # Запуск аудита
 # ============================================================
 
-def audit() -> dict[str, Any]:
-    """Один аудит. Возвращает {'report_md', 'facts', 'usage', 'cost_usd', 'proposals_created'}."""
-    facts = gather_facts()
-    user_msg = _build_user_message(facts)
-
-    api_key = settings.ceo_openrouter_api_key or settings.openrouter_api_key
-    if not api_key:
-        raise RuntimeError("Neither ceo_openrouter_api_key nor openrouter_api_key is set.")
-
+def _make_client(api_key: str):
     from openai import OpenAI
     import httpx
 
     http_kwargs: dict[str, Any] = {"timeout": 180.0}
-    # CEO ходит на anthropic/claude-* через OpenRouter — НЕ российский эндпоинт,
+    # CEO ходит на anthropic/claude-* через OpenRouter — НЕ RU-эндпоинт,
     # поэтому если задан http_proxy_url, его используем.
     if settings.http_proxy_url:
         http_kwargs["proxy"] = settings.http_proxy_url
 
-    client = OpenAI(
+    return OpenAI(
         api_key=api_key,
         base_url=settings.openrouter_base_url,
         http_client=httpx.Client(**http_kwargs),
     )
 
-    log.info("CEO audit: model=%s, facts_size=%d chars", settings.ceo_model, len(user_msg))
-    started = datetime.utcnow()
-    resp = client.chat.completions.create(
+
+def _call_llm(api_key: str, user_msg: str, max_tokens: int):
+    client = _make_client(api_key)
+    return client.chat.completions.create(
         model=settings.ceo_model,
         messages=[
             {"role": "system", "content": CEO_SYSTEM_PROMPT},
             {"role": "user", "content": user_msg},
         ],
-        max_tokens=4000,
+        max_tokens=max_tokens,
         extra_headers={
             "HTTP-Referer": "https://lead-generator.ru",
             "X-Title": "Stenvik CEO Audit",
         },
     )
+
+
+def audit() -> dict[str, Any]:
+    """Один аудит. Возвращает {'report_md', 'facts', 'usage', 'cost_usd', 'proposals_created'}."""
+    from openai import APIStatusError
+
+    facts = gather_facts()
+    user_msg = _build_user_message(facts)
+
+    primary_key = settings.ceo_openrouter_api_key or settings.openrouter_api_key
+    if not primary_key:
+        raise RuntimeError("Neither ceo_openrouter_api_key nor openrouter_api_key is set.")
+    fallback_key = (
+        settings.openrouter_api_key
+        if (settings.ceo_openrouter_api_key
+            and settings.openrouter_api_key
+            and settings.ceo_openrouter_api_key != settings.openrouter_api_key)
+        else None
+    )
+
+    log.info("CEO audit: model=%s, facts_size=%d chars", settings.ceo_model, len(user_msg))
+    started = datetime.utcnow()
+    used_key_label = "ceo_key"
+    try:
+        resp = _call_llm(primary_key, user_msg, max_tokens=4000)
+    except APIStatusError as e:
+        if e.status_code == 402 and fallback_key:
+            log.warning(
+                "CEO key out of credits (402). Falling back to main openrouter_api_key. "
+                "Top up CEO key at https://openrouter.ai/settings/credits to separate budgets."
+            )
+            used_key_label = "main_key_fallback"
+            resp = _call_llm(fallback_key, user_msg, max_tokens=4000)
+        else:
+            raise
     finished = datetime.utcnow()
     report_md = resp.choices[0].message.content or ""
     usage = resp.usage
@@ -409,7 +437,7 @@ def audit() -> dict[str, Any]:
         cache_read_tokens=cached,
         cost_usd=cost_usd,
         success=True,
-        summary=f"audit produced {len(proposals)} proposals",
+        summary=f"audit produced {len(proposals)} proposals (key={used_key_label})",
         started_at=started,
     )
     record.persist()
@@ -420,7 +448,7 @@ def audit() -> dict[str, Any]:
     journal_file = JOURNAL_DIR / f"audit-{ts}.md"
     header = (
         f"# CEO Audit — {started.isoformat()}Z\n\n"
-        f"- model: `{settings.ceo_model}`\n"
+        f"- model: `{settings.ceo_model}` (key: `{used_key_label}`)\n"
         f"- input_tokens: {in_t} (cache_read: {cached})\n"
         f"- output_tokens: {out_t}\n"
         f"- cost_usd: {cost_usd:.5f} (~₽{cost_usd*92:.2f})\n"
@@ -442,6 +470,7 @@ def audit() -> dict[str, Any]:
         "proposals_created": len(proposal_ids),
         "proposal_ids": proposal_ids,
         "journal_file": str(journal_file),
+        "used_key": used_key_label,
     }
 
 
@@ -491,8 +520,8 @@ def _save_proposals(proposals: list[dict[str, Any]]) -> list[int]:
 def _print_summary(result: dict[str, Any]) -> None:
     print("=" * 70)
     print(f"CEO Audit completed.")
-    print(f"  model: {settings.ceo_model}")
-    print(f"  cost: ${result['cost_usd']:.5f} (~₽{result['cost_rub_approx']:.2f})")
+    print(f"  model: {settings.ceo_model}  (key: {result.get('used_key', '?')})")
+    print(f"  cost: ${result['cost_usd']:.5f} (~RUB {result['cost_rub_approx']:.2f})")
     print(f"  tokens: in={result['usage']['input_tokens']} (cache_read={result['usage']['cache_read']}) out={result['usage']['output_tokens']}")
     print(f"  proposals created: {result['proposals_created']} (ids: {result['proposal_ids']})")
     print(f"  journal: {result['journal_file']}")
