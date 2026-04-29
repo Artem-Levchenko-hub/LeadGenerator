@@ -261,6 +261,71 @@ def company_page(
         )
         convs_with_msgs.append({"conv": c, "messages": msgs})
 
+    # Унифицированная Timeline — все события компании в одном потоке.
+    timeline = []
+    if company.created_at:
+        timeline.append({
+            "ts": company.created_at, "kind": "hunter", "icon": "🎯",
+            "title": "Hunter нашёл лида",
+            "details": f"источник: {(company.contacts or {}).get('2gis_url') or 'unknown'}",
+            "color": "#3498db",
+        })
+    if company.score_updated_at:
+        timeline.append({
+            "ts": company.score_updated_at, "kind": "scorer", "icon": "⚖",
+            "title": f"Scorer: {company.score} / 100",
+            "details": company.score_reason or "",
+            "color": "#9b59b6",
+        })
+    for h in history:
+        timeline.append({
+            "ts": h.changed_at, "kind": "stage", "icon": "🔄",
+            "title": f"Стадия: {h.from_stage or '—'} → {h.to_stage}",
+            "details": h.reason or "",
+            "color": "#16a085",
+        })
+    for r in runs:
+        if r.success:
+            title = f"Outreach Agent · {r.iterations} iter · ${r.cost_usd:.4f}"
+            color = "#27ae60"
+            details = r.summary or ""
+        else:
+            title = f"Outreach Agent ОШИБКА · {r.iterations} iter"
+            color = "#e74c3c"
+            details = (r.error_text or r.summary or "")[:300]
+        timeline.append({
+            "ts": r.started_at, "kind": "agent_run", "icon": "🤖",
+            "title": title, "details": details, "color": color,
+            "model": r.model,
+        })
+    for m in outbox:
+        status_icon = {
+            "draft": "📝", "holding": "🟡", "sent": "✅",
+            "rejected": "🔴", "failed": "❌", "cancelled": "⚪",
+        }.get(m.status, "📨")
+        status_color = {
+            "draft": "#95a5a6", "holding": "#f39c12", "sent": "#27ae60",
+            "rejected": "#e74c3c", "failed": "#c0392b", "cancelled": "#7f8c8d",
+        }.get(m.status, "#666")
+        timeline.append({
+            "ts": m.created_at, "kind": "outbox", "icon": status_icon,
+            "title": f"Draft #{m.id} → {m.to_address} [{m.status}]",
+            "details": (m.audit_notes or m.body_text or "")[:300],
+            "color": status_color,
+            "outbox_id": m.id,
+        })
+    for cm in convs_with_msgs:
+        for msg in cm["messages"]:
+            direction = "↘ inbound" if msg.direction == "in" else "↗ outbound"
+            timeline.append({
+                "ts": msg.received_at, "kind": "message", "icon": "💬",
+                "title": f"{direction} от {msg.sender or '—'}",
+                "details": (msg.body_text or "")[:300],
+                "color": "#2980b9" if msg.direction == "in" else "#7f8c8d",
+            })
+
+    timeline.sort(key=lambda e: e["ts"] or datetime.min, reverse=True)
+
     return templates.TemplateResponse(
         request, "studio/company.html",
         {
@@ -271,6 +336,7 @@ def company_page(
             "history": history,
             "outbox": outbox,
             "runs": runs,
+            "timeline": timeline,
         },
     )
 

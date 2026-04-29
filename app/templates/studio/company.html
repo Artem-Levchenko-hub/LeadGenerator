@@ -13,6 +13,24 @@
       </div>
     </div>
     <div style="text-align:right">
+      {% if company.score is not none %}
+        {% set s = company.score %}
+        {% if s >= 70 %}{% set sc_bg = '#c0392b' %}{% set sc_fg = 'white' %}
+        {% elif s >= 55 %}{% set sc_bg = '#e67e22' %}{% set sc_fg = 'white' %}
+        {% elif s >= 40 %}{% set sc_bg = '#f1c40f' %}{% set sc_fg = '#333' %}
+        {% else %}{% set sc_bg = '#bdc3c7' %}{% set sc_fg = '#333' %}
+        {% endif %}
+        <div style="font-size:11px;text-transform:uppercase;color:#999;margin-bottom:4px">SCORE</div>
+        <div title="{{ company.score_reason or '' }}"
+             style="background:{{ sc_bg }};color:{{ sc_fg }};padding:8px 16px;border-radius:6px;font-weight:700;font-size:22px;display:inline-block;margin-bottom:8px">
+          {{ company.score }} / 100
+        </div>
+        {% if company.score_reason %}
+          <div style="font-size:11px;color:#888;max-width:240px;margin-bottom:8px">
+            {{ company.score_reason }}
+          </div>
+        {% endif %}
+      {% endif %}
       <div style="font-size:12px;text-transform:uppercase;color:#999">текущая стадия</div>
       <div style="background:#2c3e50;color:white;padding:6px 14px;border-radius:6px;font-weight:600;margin-top:4px;display:inline-block">
         {{ STAGE_LABELS.get(company.stage, company.stage) }}
@@ -54,6 +72,48 @@
     <pre style="white-space:pre-wrap;margin:4px 0 0;font-family:inherit">{{ company.notes }}</pre>
   </section>
   {% endif %}
+
+  {# === TIMELINE — все события в одной хронологии (n8n-style flow) === #}
+  <section style="margin-top:24px;background:white;border:1px solid #ddd;border-radius:8px;padding:18px">
+    <h2 style="font-size:14px;text-transform:uppercase;color:#444;margin:0 0 14px">
+      📊 Timeline — что происходило с этим лидом ({{ timeline | length }})
+    </h2>
+    {% if timeline %}
+    <div style="position:relative;padding-left:28px">
+      {# Вертикальная линия слева #}
+      <div style="position:absolute;left:11px;top:8px;bottom:8px;width:2px;background:#e0e0e0"></div>
+
+      {% for evt in timeline %}
+      <div style="position:relative;margin-bottom:14px;padding-bottom:14px;border-bottom:1px dashed #f0f0f0">
+        {# Кружок-маркер #}
+        <div style="position:absolute;left:-28px;top:2px;width:24px;height:24px;border-radius:50%;background:{{ evt.color }};display:flex;align-items:center;justify-content:center;font-size:13px;color:white;box-shadow:0 0 0 3px white">
+          {{ evt.icon }}
+        </div>
+        {# Содержимое события #}
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+          <div style="flex:1;min-width:300px">
+            <div style="font-weight:600;font-size:14px;color:#222">{{ evt.title }}</div>
+            {% if evt.details %}
+            <div style="color:#666;font-size:13px;margin-top:3px;line-height:1.5">{{ evt.details }}</div>
+            {% endif %}
+            {% if evt.kind == 'agent_run' and evt.model %}
+              <div style="font-size:11px;color:#999;margin-top:3px;font-family:monospace">{{ evt.model }}</div>
+            {% endif %}
+            {% if evt.kind == 'outbox' and evt.outbox_id %}
+              <div style="font-size:11px;margin-top:3px"><a href="/outbox#m-{{ evt.outbox_id }}" style="color:#2980b9;text-decoration:none">→ открыть в outbox</a></div>
+            {% endif %}
+          </div>
+          <div style="text-align:right;color:#999;font-size:11px;font-family:monospace;white-space:nowrap">
+            {{ evt.ts.strftime('%m-%d %H:%M:%S') if evt.ts else '—' }}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div style="color:#999;text-align:center;padding:20px">Событий ещё нет.</div>
+    {% endif %}
+  </section>
 
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px">
     {# === Левая колонка === #}
