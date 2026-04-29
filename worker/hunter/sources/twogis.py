@@ -61,7 +61,8 @@ class TwoGISSource(LeadSource):
             if emitted >= limit:
                 return
             try:
-                items = self._search_page(category, city, page_size=50)
+                # 2GIS Free-tier: page_size > 10 даёт 400. Берём 10.
+                items = self._search_page(category, city, page_size=10)
             except Exception:  # noqa: BLE001
                 log.exception("2gis search failed for %s/%s", category, city)
                 continue
