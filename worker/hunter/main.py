@@ -140,6 +140,15 @@ def _save_hit(db, hit: LeadHit) -> models.Company | None:
     return c
 
 
+def _score_company_safe(company_id: int) -> None:
+    """Best-effort scoring сразу после создания. Без LLM."""
+    try:
+        from worker.scorer import score_one
+        score_one(company_id)
+    except Exception:  # noqa: BLE001
+        log.exception("hunter: scorer failed for company %d", company_id)
+
+
 def get_active_sources() -> list[LeadSource]:
     sources: list[LeadSource] = []
     s_2gis = TwoGISSource()
@@ -176,6 +185,7 @@ def run_one_tick(*, max_per_tick: int = 5) -> dict:
         try:
             for hit in source.iter_leads(limit=max_per_tick - created):
                 seen += 1
+                saved_id: int | None = None
                 with SessionLocal() as db:
                     try:
                         saved = _save_hit(db, hit)
@@ -183,9 +193,14 @@ def run_one_tick(*, max_per_tick: int = 5) -> dict:
                             skipped_dup += 1
                         else:
                             created += 1
+                            saved_id = saved.id
                     except Exception:  # noqa: BLE001
                         log.exception("save_hit failed for %r", hit.name)
                         errors += 1
+                # Скорим в отдельной сессии — fetch_site внутри (HTTP запрос),
+                # не должен держать write-lock на companies.
+                if saved_id is not None:
+                    _score_company_safe(saved_id)
                 if created >= max_per_tick:
                     break
         except Exception:  # noqa: BLE001

@@ -112,7 +112,17 @@ class Settings(BaseSettings):
     # пользователь сам нажимает «Запустить Outreach» на /company/{id}
     # когда хочет тратить токены на конкретный лид. Защищает от burn'а
     # на лидах которые сейчас не в фокусе.
-    auto_outreach_enabled: bool = False
+    auto_outreach_enabled: bool = True
+
+    # Квота: сколько глубоких Outreach-анализов запускаем за день. При
+    # превышении orchestrator скипает enqueue до полуночи. По бюджету:
+    # 20 × ₽2 = ₽40/день = ~₽1200/мес. Плюс реплаи на ответы.
+    daily_outreach_quota: int = 20
+
+    # Минимальный score чтобы лид был достоин deep-analysis. Считается
+    # scorer'ом (без LLM) на основе ICP, наличия сайта, CMS, mobile,
+    # https и т.д. 0=холодный, 100=горящий.
+    score_threshold: int = 55
 
     tz: str = "Europe/Moscow"
 

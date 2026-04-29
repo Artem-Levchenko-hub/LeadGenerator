@@ -162,6 +162,17 @@ def migrate_v2_agent_studio() -> dict:
             if existing and "trace" not in existing:
                 conn.execute("ALTER TABLE agent_runs ADD COLUMN trace JSON")
                 conn.commit()
+            # Companies: добавляем поля для scorer'а
+            comp_existing = _existing_columns(conn, "companies")
+            for col_name, col_type in [
+                ("score", "INTEGER"),
+                ("score_reason", "TEXT"),
+                ("score_updated_at", "DATETIME"),
+            ]:
+                if comp_existing and col_name not in comp_existing:
+                    conn.execute(f"ALTER TABLE companies ADD COLUMN {col_name} {col_type}")
+                    print(f"[alter] companies + {col_name} {col_type}")
+            conn.commit()
         finally:
             conn.close()
 

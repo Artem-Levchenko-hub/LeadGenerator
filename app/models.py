@@ -307,6 +307,9 @@ AGENT_AUDITOR      = "auditor"
 AGENT_STRATEGIC    = "strategic"
 
 
+# --- Stages ---
+# Стадии воронки выше определяются константами STAGE_PROSPECT etc
+
 class Company(Base):
     """Главная full-cycle сущность.
 
@@ -334,6 +337,12 @@ class Company(Base):
     )
     needs_human: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Скор «насколько компании нужна цифровизация» — 0..100. Считается scorer'ом
+    # без LLM (fetch_site + эвристики). Используется для приоритизации:
+    # пользователь сначала тратит ручное время + LLM на топ по score.
+    score: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    score_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    score_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     last_stage_change_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, index=True,
@@ -344,6 +353,7 @@ class Company(Base):
 
     __table_args__ = (
         Index("idx_company_stage_changed", "stage", "last_stage_change_at"),
+        Index("idx_company_score_desc", "score"),
     )
 
 

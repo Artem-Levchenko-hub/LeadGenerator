@@ -65,30 +65,54 @@ def tick() -> dict:
 
     enq_first = 0
     enq_cont = 0
-    auto_off = not _settings.auto_outreach_enabled
+    quota_left = 0
     with SessionLocal() as db:
         if kill_switch_active(db):
             return {"skipped": "kill_switch_active"}
 
         # 1) Companies без касаний → ставим outreach.first_touch
-        # ВАЖНО: только если AUTO_OUTREACH_ENABLED=true. Иначе лиды лежат в
-        # БД, ждут что пользователь зайдёт на /company/{id} и нажмёт
-        # «Запустить Outreach Agent» вручную. Это сохраняет LLM-токены —
-        # AI не дёргается на каждого нового prospect'а автоматически.
-        if not auto_off:
-            prospects = (
-                db.query(models.Company)
-                .filter(models.Company.stage == models.STAGE_PROSPECT)
-                .filter(models.Company.needs_human.is_(False))
-                .order_by(models.Company.created_at.asc())
-                .limit(20)
-                .all()
+        # Логика:
+        # - auto_outreach_enabled=False — полностью ручной режим, скипаем.
+        # - иначе: считаем сколько first_touch уже enqueue'ено за СЕГОДНЯ;
+        #   если < daily_outreach_quota — добираем разницу, выбирая prospects
+        #   с самым высоким score (>= score_threshold).
+        if _settings.auto_outreach_enabled:
+            today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            today_count = (
+                db.query(models.AgentTask)
+                .filter(models.AgentTask.kind == models.TASK_OUTREACH_FIRST)
+                .filter(models.AgentTask.scheduled_at >= today_start)
+                .count()
             )
-            for c in prospects:
-                if has_open_task(db, models.TASK_OUTREACH_FIRST, c.id):
-                    continue
-                enqueue(db, kind=models.TASK_OUTREACH_FIRST, company_id=c.id)
-                enq_first += 1
+            quota_left = max(0, _settings.daily_outreach_quota - today_count)
+            if quota_left > 0:
+                # Берём топ по score — реально горячих лидов сначала.
+                # Исключаем компании на которых УЖЕ был first_touch (любой
+                # статус) — повторное касание = впустую жгём токены на тех
+                # же лидах. Это была главная причина 691 run'ов на 22
+                # компаниях в проде до этого фикса.
+                touched_subq = (
+                    select(models.AgentTask.company_id)
+                    .where(models.AgentTask.kind == models.TASK_OUTREACH_FIRST)
+                )
+                prospects = (
+                    db.query(models.Company)
+                    .filter(models.Company.stage == models.STAGE_PROSPECT)
+                    .filter(models.Company.needs_human.is_(False))
+                    .filter(
+                        (models.Company.score.is_(None))
+                        | (models.Company.score >= _settings.score_threshold)
+                    )
+                    .filter(not_(models.Company.id.in_(touched_subq)))
+                    .order_by(models.Company.score.desc())
+                    .limit(quota_left)
+                    .all()
+                )
+                for c in prospects:
+                    if enq_first >= quota_left:
+                        break
+                    enqueue(db, kind=models.TASK_OUTREACH_FIRST, company_id=c.id)
+                    enq_first += 1
 
         # 2) Новые входящие → outreach.continue
         # Идея: для каждого conversation, у которого last_inbound_at > last_outbound_at
