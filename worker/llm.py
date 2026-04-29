@@ -136,12 +136,24 @@ class AgentRunRecord:
 
 # === HTTP-клиент с прокси ===
 
-def _httpx_client():
+def _httpx_client(*, use_proxy: bool = True):
+    """Создаёт httpx-клиент. Прокси используется только когда use_proxy=True
+    (для api.anthropic.com / api.openrouter.ai из РФ). Для российских прокси
+    типа vsegpt.ru / proxyapi.ru / bothub.chat прокси не нужен и даже вреден.
+    """
     import httpx
     kwargs: dict[str, Any] = {"timeout": 90.0}
-    if settings.http_proxy_url:
+    if use_proxy and settings.http_proxy_url:
         kwargs["proxy"] = settings.http_proxy_url
     return httpx.Client(**kwargs)
+
+
+def _is_ru_endpoint(base_url: str) -> bool:
+    """Определяет является ли base_url российским провайдером (без прокси)."""
+    if not base_url:
+        return False
+    ru_hosts = ("vsegpt.ru", "proxyapi.ru", "bothub.chat", "gpthub.ru", "neuroapi.ru")
+    return any(h in base_url.lower() for h in ru_hosts)
 
 
 # === Anthropic backend (нативный) ===
@@ -267,8 +279,11 @@ def _run_openai(
     api_key = settings.openrouter_api_key or settings.anthropic_api_key
     base_url = settings.openrouter_base_url
     kwargs: dict[str, Any] = {"api_key": api_key, "base_url": base_url}
-    if settings.http_proxy_url:
-        kwargs["http_client"] = _httpx_client()
+    use_proxy = settings.http_proxy_url and not _is_ru_endpoint(base_url)
+    if use_proxy:
+        kwargs["http_client"] = _httpx_client(use_proxy=True)
+    else:
+        kwargs["http_client"] = _httpx_client(use_proxy=False)
     client = OpenAI(**kwargs)
 
     openai_tools = anthropic_tools_to_openai(tools)
