@@ -308,6 +308,52 @@ def outbox_page(request: Request, db: Session = Depends(get_db)):
     )
 
 
+@router.post("/company/{company_id}/trigger-outreach")
+def trigger_outreach(
+    company_id: int, request: Request, db: Session = Depends(get_db),
+):
+    """Ручной запуск Outreach Agent на конкретную компанию.
+
+    Кладёт задачу в agent_tasks(kind=outreach.first_touch) с priority=10,
+    воркер подхватит на ближайшем тике (≤60 сек) и запустит агента.
+    """
+    user = _require_user(request)
+    company = db.query(models.Company).filter_by(id=company_id).one_or_none()
+    if not company:
+        raise HTTPException(404, "company not found")
+
+    # Проверка не висит ли уже задача
+    existing = (
+        db.query(models.AgentTask)
+        .filter_by(kind=models.TASK_OUTREACH_FIRST, company_id=company_id)
+        .filter(models.AgentTask.status.in_(("pending", "running")))
+        .first()
+    )
+    if existing:
+        return RedirectResponse(
+            f"/company/{company_id}?msg=already_pending",
+            status_code=303,
+        )
+
+    task = models.AgentTask(
+        kind=models.TASK_OUTREACH_FIRST,
+        company_id=company_id,
+        priority=10,
+        scheduled_at=datetime.utcnow(),
+        payload={"triggered_by_user_id": user.id},
+    )
+    db.add(task)
+    log_activity(
+        db, user.id, action="outreach_triggered_manual",
+        meta={"company_id": company_id},
+    )
+    db.commit()
+    return RedirectResponse(
+        f"/company/{company_id}?msg=outreach_queued",
+        status_code=303,
+    )
+
+
 @router.post("/api/outbox/{outbox_id}/cancel")
 def api_outbox_cancel(
     outbox_id: int, request: Request, db: Session = Depends(get_db),

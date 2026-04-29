@@ -20,8 +20,33 @@
       {% if company.needs_human %}
         <div style="margin-top:6px"><span style="background:#e67e22;color:white;padding:3px 8px;border-radius:3px;font-size:12px;font-weight:600">🚨 NEEDS HUMAN</span></div>
       {% endif %}
+
+      {# Кнопка: ручной запуск Outreach Agent #}
+      {% if company.stage in ['prospect', 'contacted'] %}
+      <form method="post" action="/company/{{ company.id }}/trigger-outreach" style="margin-top:8px">
+        <button type="submit"
+                style="background:#27ae60;color:white;border:0;padding:8px 14px;border-radius:6px;font-weight:600;cursor:pointer">
+          🤖 Запустить Outreach Agent
+        </button>
+      </form>
+      <div style="font-size:11px;color:#999;margin-top:4px;max-width:240px">
+        Агент проанализирует сайт, найдёт слабые места, напишет письмо.
+        Письмо ляжет в outbox с холодильником 10 мин.
+      </div>
+      {% endif %}
     </div>
   </div>
+
+  {% if request.query_params.get('msg') %}
+  <div style="margin-top:12px;padding:10px 14px;border-radius:6px;
+              background:{% if request.query_params.get('msg') == 'outreach_queued' %}#d4efdf;border:1px solid #27ae60{% else %}#fff8e1;border:1px solid #f39c12{% endif %}">
+    {% if request.query_params.get('msg') == 'outreach_queued' %}
+      ✓ Outreach Agent поставлен в очередь. Через ≤60 сек начнёт работу — следи за <a href="/feed">/feed</a>.
+    {% elif request.query_params.get('msg') == 'already_pending' %}
+      ⚠ Задача Outreach уже в очереди — подожди или обнови страницу.
+    {% endif %}
+  </div>
+  {% endif %}
 
   {% if company.notes %}
   <section style="margin-top:16px;background:#fff8e1;border-left:3px solid #f39c12;padding:10px 14px;border-radius:0 6px 6px 0">
