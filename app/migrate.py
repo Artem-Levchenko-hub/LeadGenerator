@@ -143,21 +143,139 @@ def migrate() -> dict:
     return report
 
 
+def migrate_v2_agent_studio() -> dict:
+    """Миграция v2: создаёт новые таблицы агентной студии и сеет начальные данные.
+
+    Идемпотентна. Базовая работа делается через init_db() (create_all безопасно
+    создаёт только отсутствующие таблицы); потом сидим стартовые записи в
+    kill_switch и cases.
+    """
+    db_path = _sqlite_path()
+    if not db_path.exists():
+        init_db()  # создаст всё с нуля если БД пустая
+    else:
+        init_db()  # добавит новые таблицы поверх старых
+
+    report = {
+        "path": str(db_path),
+        "seeded_kill_switch": False,
+        "seeded_cases": [],
+    }
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    try:
+        # 1) Сеем kill_switch — единственная строка, состояние = running.
+        if _table_exists(conn, "kill_switch"):
+            row = conn.execute("SELECT id FROM kill_switch WHERE id=1").fetchone()
+            if not row:
+                conn.execute(
+                    "INSERT INTO kill_switch (id, state, reason, set_at) "
+                    "VALUES (1, 'running', NULL, CURRENT_TIMESTAMP)"
+                )
+                report["seeded_kill_switch"] = True
+
+        # 2) Сеем стартовые кейсы портфолио (kanavto, kamelia, innertalk).
+        #    ВАЖНО: для innertalk явно прописываем restrictions_text про шифрование.
+        if _table_exists(conn, "cases"):
+            seed_cases = [
+                {
+                    "name": "kanavto.ru",
+                    "url": "https://kanavto.ru",
+                    "industry": "автосервис",
+                    "services": '["корпоративный сайт","онлайн-бронирование","личный кабинет"]',
+                    "summary": (
+                        "Премиум-автосервис в Краснодаре для европейских авто (BMW, "
+                        "Mercedes, Audi, Porsche). 4 филиала, 71k+ клиентов с 1995. "
+                        "Сайт с онлайн-бронированием, личным кабинетом и историей работ."
+                    ),
+                    "metrics_text": "71 000+ клиентов · 4 филиала · премия 2ГИС",
+                    "restrictions_text": None,
+                },
+                {
+                    "name": "kamelia",
+                    "url": "https://kamelia.innertalk.space",
+                    "industry": "стоматология",
+                    "services": '["корпоративный сайт","онлайн-запись","рассрочка"]',
+                    "summary": (
+                        "Сетевая стоматология в Казани. 5 филиалов, 42 специалиста, "
+                        "4.9★ (1240 отзывов). Сайт с онлайн-записью, упоминаниями "
+                        "3D-сканеров и ИИ-диагностики."
+                    ),
+                    "metrics_text": "5 филиалов · 42 специалиста · 4.9★ (1240 отзывов)",
+                    "restrictions_text": None,
+                },
+                {
+                    "name": "innertalk.space",
+                    "url": "https://innertalk.space",
+                    "industry": "корпоративные сервисы",
+                    "services": '["веб-приложение","видеозвонки","корпоративный мессенджер"]',
+                    "summary": (
+                        "Корпоративный мессенджер с групповыми и видеозвонками. "
+                        "Чаты, рабочие пространства, обмен файлами для команд."
+                    ),
+                    "metrics_text": None,
+                    "restrictions_text": (
+                        "🚫 НЕЛЬЗЯ упоминать шифрование/E2E/encryption в любом виде "
+                        "при описании этого кейса. Описывай только функции "
+                        "(групповые звонки, видеозвонки, мессенджер) без заявлений "
+                        "о защищённости/приватности на уровне крипто."
+                    ),
+                },
+            ]
+            for case in seed_cases:
+                exists = conn.execute(
+                    "SELECT id FROM cases WHERE name=?", (case["name"],)
+                ).fetchone()
+                if exists:
+                    continue
+                conn.execute(
+                    "INSERT INTO cases "
+                    "(name, url, industry, services, summary, metrics_text, "
+                    " restrictions_text, active, created_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)",
+                    (
+                        case["name"], case["url"], case["industry"],
+                        case["services"], case["summary"], case["metrics_text"],
+                        case["restrictions_text"],
+                    ),
+                )
+                report["seeded_cases"].append(case["name"])
+
+        conn.commit()
+    finally:
+        conn.close()
+
+    return report
+
+
 def main() -> int:
     try:
         report = migrate()
     except Exception as e:
-        print(f"[error] Migration failed: {e}", file=sys.stderr)
+        print(f"[error] Migration v1 failed: {e}", file=sys.stderr)
         return 1
 
-    print("\n=== Migration report ===")
+    print("\n=== Migration v1 report ===")
     for k, v in report.items():
         print(f"  {k}: {v}")
-    print("========================\n")
     if report.get("already_up_to_date"):
-        print("[ok] БД уже актуальная, изменений не требуется.")
+        print("[ok] БД (v1) уже актуальная.")
     else:
-        print("[ok] Миграция успешно применена.")
+        print("[ok] Миграция v1 применена.")
+
+    # Migration v2: agent studio tables + seed.
+    try:
+        v2 = migrate_v2_agent_studio()
+    except Exception as e:
+        print(f"[error] Migration v2 failed: {e}", file=sys.stderr)
+        return 1
+    print("\n=== Migration v2 (agent studio) report ===")
+    for k, v in v2.items():
+        print(f"  {k}: {v}")
+    print("========================\n")
+    print("[ok] Миграция v2 применена.")
+
     return 0
 
 

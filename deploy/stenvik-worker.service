@@ -1,0 +1,26 @@
+[Unit]
+Description=Stenvik Agent Studio Worker
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=i48ptgvnis
+WorkingDirectory=/home/i48ptgvnis/stenvik-leads
+EnvironmentFile=/home/i48ptgvnis/stenvik-leads/.env
+ExecStart=/home/i48ptgvnis/stenvik-leads/.venv/bin/python -m worker.main
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=stenvik-worker
+
+# Минимальная изоляция (не root, нет лишних привилегий).
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/home/i48ptgvnis/stenvik-leads/data /home/i48ptgvnis/stenvik-leads/logs
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
