@@ -433,6 +433,10 @@ class AgentRun(Base):
     success: Mapped[bool] = mapped_column(Boolean, default=False)
     error_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Полный trace: список dict {step, kind=text|tool_call|tool_result,
+    #   tool, input, output_short, in_tokens, out_tokens}.
+    # Видно на странице /company/{id} — что именно агент делал и сколько стоило.
+    trace: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
 
 class Conversation(Base):

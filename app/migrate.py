@@ -155,6 +155,15 @@ def migrate_v2_agent_studio() -> dict:
         init_db()  # создаст всё с нуля если БД пустая
     else:
         init_db()  # добавит новые таблицы поверх старых
+        # ALTER для уже существующих таблиц
+        conn = sqlite3.connect(db_path)
+        try:
+            existing = _existing_columns(conn, "agent_runs")
+            if existing and "trace" not in existing:
+                conn.execute("ALTER TABLE agent_runs ADD COLUMN trace JSON")
+                conn.commit()
+        finally:
+            conn.close()
 
     report = {
         "path": str(db_path),

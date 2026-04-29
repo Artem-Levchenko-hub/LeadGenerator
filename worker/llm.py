@@ -100,6 +100,7 @@ class AgentRunRecord:
     success: bool = False
     error_text: str | None = None
     summary: str | None = None
+    trace: list = field(default_factory=list)
     started_at: datetime = field(default_factory=datetime.utcnow)
 
     def add_usage(self, model: str, usage: dict) -> None:
@@ -110,6 +111,15 @@ class AgentRunRecord:
         self.cache_read_tokens += int(usage.get("cache_read_input_tokens", 0) or 0)
         self.cache_write_tokens += int(usage.get("cache_creation_input_tokens", 0) or 0)
         self.cost_usd += estimate_cost_usd(model, usage)
+
+    def add_trace_step(self, **fields: Any) -> None:
+        """Добавляет шаг в trace. Используется для видимости работы агента на UI.
+
+        Типичные поля: kind (text|tool_call|tool_result), tool, input_short,
+        output_short, dur_ms.
+        """
+        step = {"step": len(self.trace) + 1, **fields}
+        self.trace.append(step)
 
     def persist(self) -> None:
         with SessionLocal() as db:
@@ -129,6 +139,7 @@ class AgentRunRecord:
                 success=self.success,
                 error_text=self.error_text,
                 summary=self.summary,
+                trace=self.trace or None,
             )
             db.add(run)
             db.commit()
@@ -330,6 +341,12 @@ def _run_openai(
         msg = choice.message
         finish_reason = choice.finish_reason
 
+        # Trace: что сказала модель текстом
+        if msg.content:
+            record.add_trace_step(
+                kind="thought", text=(msg.content or "")[:500],
+            )
+
         # Записываем assistant message в историю.
         assistant_msg: dict = {"role": "assistant"}
         if msg.content:
@@ -360,6 +377,7 @@ def _run_openai(
                 tool_args = json.loads(tc.function.arguments or "{}")
             except Exception:  # noqa: BLE001
                 tool_args = {}
+            t0 = datetime.utcnow()
             handler = tool_handlers.get(tool_name)
             if handler is None:
                 content = f"ERROR: unknown tool '{tool_name}'"
@@ -369,6 +387,15 @@ def _run_openai(
                     content = str(result) if result is not None else "OK"
                 except Exception as e:  # noqa: BLE001
                     content = f"ERROR: {type(e).__name__}: {e}"
+            dur_ms = int((datetime.utcnow() - t0).total_seconds() * 1000)
+
+            # Trace: вызов инструмента
+            record.add_trace_step(
+                kind="tool_call", tool=tool_name,
+                input_short=json.dumps(tool_args, ensure_ascii=False)[:400],
+                output_short=str(content)[:600],
+                dur_ms=dur_ms,
+            )
 
             messages.append({
                 "role": "tool",

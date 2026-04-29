@@ -135,23 +135,67 @@
         <div style="color:#999;font-size:13px">Диалогов пока не было.</div>
       {% endfor %}
 
-      {# Agent runs #}
-      <h2 style="font-size:14px;text-transform:uppercase;color:#444;margin:24px 0 8px">Запуски агентов</h2>
-      <table style="width:100%;font-size:12px;border-collapse:collapse">
-        <tbody>
-          {% for r in runs %}
-          <tr style="border-bottom:1px solid #eee">
-            <td style="padding:4px 6px;font-family:monospace">{{ r.started_at.strftime('%m-%d %H:%M') }}</td>
-            <td style="padding:4px 6px">{{ r.agent_kind }}</td>
-            <td style="padding:4px 6px">{% if r.success %}✓{% else %}✗{% endif %}</td>
-            <td style="padding:4px 6px;text-align:right">${{ '%.4f' | format(r.cost_usd or 0) }}</td>
-            <td style="padding:4px 6px;color:#666">{{ (r.summary or r.error_text or '')[:80] }}</td>
-          </tr>
+      {# Agent runs с trace #}
+      <h2 style="font-size:14px;text-transform:uppercase;color:#444;margin:24px 0 8px">
+        Что делал агент (последние запуски)
+      </h2>
+      {% for r in runs %}
+      <details style="border:1px solid #ddd;border-radius:6px;margin-bottom:8px;background:white" {% if loop.first %}open{% endif %}>
+        <summary style="padding:10px 12px;cursor:pointer;font-size:13px">
+          <span style="font-family:monospace;color:#999">{{ r.started_at.strftime('%m-%d %H:%M:%S') }}</span>
+          · <strong>{{ r.agent_kind }}</strong>
+          {% if r.success %}<span style="color:#27ae60">✓</span>{% else %}<span style="color:#c0392b">✗</span>{% endif %}
+          · {{ r.iterations }} итер
+          · ${{ '%.4f' | format(r.cost_usd or 0) }} (≈{{ '%.2f' | format((r.cost_usd or 0) * 100) }} ₽)
+          · {{ '{:,}'.format((r.input_tokens or 0) + (r.output_tokens or 0)) }} токенов
+        </summary>
+        <div style="padding:0 12px 12px 12px">
+          {% if r.summary %}
+          <div style="background:#f0f7ff;padding:8px 10px;border-radius:4px;margin:6px 0;font-size:13px">
+            <strong>Итог:</strong> {{ r.summary }}
+          </div>
+          {% endif %}
+          {% if r.error_text %}
+          <div style="background:#fdedec;padding:8px 10px;border-radius:4px;margin:6px 0;font-size:13px;color:#c0392b">
+            <strong>Ошибка:</strong> {{ r.error_text }}
+          </div>
+          {% endif %}
+          <div style="font-size:11px;color:#666;margin:6px 0">
+            Модель: <code>{{ r.model or '—' }}</code> ·
+            input: {{ '{:,}'.format(r.input_tokens or 0) }} ·
+            output: {{ '{:,}'.format(r.output_tokens or 0) }} ·
+            cache: {{ '{:,}'.format(r.cache_read_tokens or 0) }}
+          </div>
+
+          {% if r.trace %}
+          <div style="margin-top:8px">
+            <div style="font-size:11px;text-transform:uppercase;color:#999;margin-bottom:4px">Шаги агента:</div>
+            {% for step in r.trace %}
+            <div style="border-left:3px solid {% if step.kind == 'thought' %}#9b59b6{% elif step.kind == 'tool_call' %}#3498db{% else %}#95a5a6{% endif %};
+                        padding:4px 8px;margin:4px 0;background:#fafafa;font-size:12px">
+              <div style="color:#999;font-size:10px">
+                #{{ step.step }} · {{ step.kind }}{% if step.tool %} · <code>{{ step.tool }}</code>{% endif %}{% if step.dur_ms %} · {{ step.dur_ms }}ms{% endif %}
+              </div>
+              {% if step.text %}
+                <div style="margin-top:2px;white-space:pre-wrap;font-style:italic;color:#444">💭 {{ step.text }}</div>
+              {% endif %}
+              {% if step.input_short %}
+                <div style="margin-top:2px;font-family:monospace;font-size:11px;color:#3498db">→ {{ step.input_short }}</div>
+              {% endif %}
+              {% if step.output_short %}
+                <div style="margin-top:2px;font-family:monospace;font-size:11px;color:#27ae60;white-space:pre-wrap">← {{ step.output_short }}</div>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
           {% else %}
-          <tr><td colspan="5" style="padding:8px;color:#999;text-align:center">Запусков не было</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+          <div style="color:#999;font-size:12px;font-style:italic">Trace недоступен (старый запуск до feature trace).</div>
+          {% endif %}
+        </div>
+      </details>
+      {% else %}
+      <div style="color:#999;font-size:13px;padding:14px">Запусков не было.</div>
+      {% endfor %}
     </div>
   </div>
 </div>

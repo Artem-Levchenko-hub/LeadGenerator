@@ -106,6 +106,36 @@ def _save_hit(db, hit: LeadHit) -> models.Company | None:
         changed_by_agent=f"hunter.{hit.source}",
         reason=f"first ingestion from {hit.source}: {hit.industry or ''} / {hit.city or ''}",
     ))
+
+    # Также создаём ProcessedLead — чтобы лид виден был на старой странице
+    # /dashboard где работают продажники с легаси-таблицей.
+    # dedup_key — обязателен, ставим source+source_id для уникальности.
+    dedup_key = f"{hit.source}:{hit.source_id or hit.name.lower()}"
+    if not db.query(models.ProcessedLead).filter_by(dedup_key=dedup_key).first():
+        pl = models.ProcessedLead(
+            dedup_key=dedup_key[:512],
+            company_name=hit.name[:512],
+            website_url=hit.website_url,
+            phone=hit.phone,
+            city=(hit.city or "")[:127] or None,
+            country="RU",
+            industry=(hit.industry or "")[:255] or None,
+            summary=(
+                f"Найден через Hunter ({hit.source}). "
+                f"{hit.address or ''}. "
+                f"2GIS: {hit.source_url or ''}"
+            )[:1000],
+            priority=3,  # средний — Outreach Agent уточнит
+            priority_reason="новый лид из автоматического Hunter",
+            deal_status=models.DEAL_STATUS_NEW,
+            updated_at=datetime.utcnow(),
+        )
+        db.add(pl)
+        db.flush()
+        # Подвязываем company.lead_id для трассируемости.
+        c.lead_id = pl.id
+        db.add(c)
+
     db.commit()
     return c
 
