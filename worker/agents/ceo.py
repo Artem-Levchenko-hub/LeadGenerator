@@ -359,10 +359,10 @@ def _make_client(api_key: str):
     )
 
 
-def _call_llm(api_key: str, user_msg: str, max_tokens: int):
+def _call_llm(api_key: str, user_msg: str, max_tokens: int, model: str):
     client = _make_client(api_key)
     return client.chat.completions.create(
-        model=settings.ceo_model,
+        model=model,
         messages=[
             {"role": "system", "content": CEO_SYSTEM_PROMPT},
             {"role": "user", "content": user_msg},
@@ -375,8 +375,19 @@ def _call_llm(api_key: str, user_msg: str, max_tokens: int):
     )
 
 
+# Цепочка fallback: пробуем cео_model, при 402 — переходим на следующую
+# дешёвую. Это спасает прогон когда баланс OpenRouter низкий — лучше
+# отчёт от Haiku чем никакого. В заголовке журнала видно какая
+# реально использовалась.
+_FALLBACK_MODELS = [
+    "anthropic/claude-sonnet-4.6",
+    "anthropic/claude-haiku-4.5",
+    "deepseek/deepseek-chat",
+]
+
+
 def audit() -> dict[str, Any]:
-    """Один аудит. Возвращает {'report_md', 'facts', 'usage', 'cost_usd', 'proposals_created'}."""
+    """Один аудит. Возвращает {'report_md', 'facts', 'usage', 'cost_usd', 'proposals_created', 'used_model', 'used_key'}."""
     from openai import APIStatusError
 
     facts = gather_facts()
@@ -393,22 +404,56 @@ def audit() -> dict[str, Any]:
         else None
     )
 
-    log.info("CEO audit: model=%s, facts_size=%d chars", settings.ceo_model, len(user_msg))
+    # Модели в порядке предпочтения (без дубликатов).
+    seen: set[str] = set()
+    models_chain: list[str] = []
+    for m in [settings.ceo_model] + _FALLBACK_MODELS:
+        if m and m not in seen:
+            models_chain.append(m)
+            seen.add(m)
+
+    keys_chain: list[tuple[str, str]] = [(primary_key, "ceo_key")]
+    if fallback_key:
+        keys_chain.append((fallback_key, "main_key_fallback"))
+
+    log.info("CEO audit: trying models=%s, facts_size=%d chars", models_chain, len(user_msg))
     started = datetime.utcnow()
-    used_key_label = "ceo_key"
-    try:
-        resp = _call_llm(primary_key, user_msg, max_tokens=4000)
-    except APIStatusError as e:
-        if e.status_code == 402 and fallback_key:
-            log.warning(
-                "CEO key out of credits (402). Falling back to main openrouter_api_key. "
-                "Top up CEO key at https://openrouter.ai/settings/credits to separate budgets."
-            )
-            used_key_label = "main_key_fallback"
-            resp = _call_llm(fallback_key, user_msg, max_tokens=4000)
-        else:
-            raise
+
+    resp = None
+    used_model = None
+    used_key_label = None
+    last_402_message = None
+    for model in models_chain:
+        for key, key_label in keys_chain:
+            try:
+                resp = _call_llm(key, user_msg, max_tokens=4000, model=model)
+                used_model = model
+                used_key_label = key_label
+                break
+            except APIStatusError as e:
+                if e.status_code == 402:
+                    last_402_message = str(e)
+                    log.warning(
+                        "402 on model=%s via %s — trying next combination. (%s)",
+                        model, key_label, str(e)[:140],
+                    )
+                    continue
+                raise
+        if resp is not None:
+            break
+
+    if resp is None:
+        raise RuntimeError(
+            f"All model/key combinations returned 402. Top up OpenRouter at "
+            f"https://openrouter.ai/settings/credits. Last error: {last_402_message}"
+        )
+
     finished = datetime.utcnow()
+    if used_model != settings.ceo_model:
+        log.warning(
+            "CEO ran on fallback model %r (preferred: %r). Top up OpenRouter to use Opus.",
+            used_model, settings.ceo_model,
+        )
     report_md = resp.choices[0].message.content or ""
     usage = resp.usage
     cached = 0
@@ -417,7 +462,7 @@ def audit() -> dict[str, Any]:
         cached = getattr(details, "cached_tokens", 0) or 0
     in_t = (getattr(usage, "prompt_tokens", 0) or 0) - cached
     out_t = getattr(usage, "completion_tokens", 0) or 0
-    cost_usd = estimate_cost_usd(settings.ceo_model, {
+    cost_usd = estimate_cost_usd(used_model, {
         "input_tokens": in_t,
         "output_tokens": out_t,
         "cache_read_input_tokens": cached,
@@ -430,7 +475,7 @@ def audit() -> dict[str, Any]:
     # Сохраняем agent_run.
     record = AgentRunRecord(
         agent_kind="ceo",
-        model=settings.ceo_model,
+        model=used_model,
         iterations=1,
         input_tokens=in_t,
         output_tokens=out_t,
@@ -446,9 +491,10 @@ def audit() -> dict[str, Any]:
     JOURNAL_DIR.mkdir(parents=True, exist_ok=True)
     ts = started.strftime("%Y%m%d-%H%M%S")
     journal_file = JOURNAL_DIR / f"audit-{ts}.md"
+    model_note = used_model if used_model == settings.ceo_model else f"{used_model} (FALLBACK from {settings.ceo_model})"
     header = (
         f"# CEO Audit — {started.isoformat()}Z\n\n"
-        f"- model: `{settings.ceo_model}` (key: `{used_key_label}`)\n"
+        f"- model: `{model_note}` (key: `{used_key_label}`)\n"
         f"- input_tokens: {in_t} (cache_read: {cached})\n"
         f"- output_tokens: {out_t}\n"
         f"- cost_usd: {cost_usd:.5f} (~₽{cost_usd*92:.2f})\n"
@@ -471,6 +517,8 @@ def audit() -> dict[str, Any]:
         "proposal_ids": proposal_ids,
         "journal_file": str(journal_file),
         "used_key": used_key_label,
+        "used_model": used_model,
+        "preferred_model": settings.ceo_model,
     }
 
 
@@ -520,7 +568,10 @@ def _save_proposals(proposals: list[dict[str, Any]]) -> list[int]:
 def _print_summary(result: dict[str, Any]) -> None:
     print("=" * 70)
     print(f"CEO Audit completed.")
-    print(f"  model: {settings.ceo_model}  (key: {result.get('used_key', '?')})")
+    used = result.get("used_model")
+    pref = result.get("preferred_model")
+    suffix = "" if used == pref else f"  [FALLBACK from {pref}]"
+    print(f"  model: {used}{suffix}  (key: {result.get('used_key', '?')})")
     print(f"  cost: ${result['cost_usd']:.5f} (~RUB {result['cost_rub_approx']:.2f})")
     print(f"  tokens: in={result['usage']['input_tokens']} (cache_read={result['usage']['cache_read']}) out={result['usage']['output_tokens']}")
     print(f"  proposals created: {result['proposals_created']} (ids: {result['proposal_ids']})")
