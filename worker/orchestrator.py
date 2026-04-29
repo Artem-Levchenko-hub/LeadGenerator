@@ -78,25 +78,28 @@ def tick() -> dict:
         #   с самым высоким score (>= score_threshold).
         if _settings.auto_outreach_enabled:
             today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+            # Quota = реально отправленные письма за сегодня. AgentTask.count
+            # ловит черновики которые завалились до отправки (SMTP fail / Auditor
+            # reject) и неправильно блокирует свежие касания. Считаем только
+            # письма которые реально дошли до SMTP successfully (status=sent).
             today_count = (
-                db.query(models.AgentTask)
-                .filter(models.AgentTask.kind == models.TASK_OUTREACH_FIRST)
-                .filter(models.AgentTask.scheduled_at >= today_start)
+                db.query(models.OutboxMessage)
+                .filter(models.OutboxMessage.status == models.OUTBOX_SENT)
+                .filter(models.OutboxMessage.created_at >= today_start)
                 .count()
             )
             quota_left = max(0, _settings.daily_outreach_quota - today_count)
             if quota_left > 0:
                 # Берём топ по score — реально горячих лидов сначала.
-                # Исключаем компании, на которые мы РЕАЛЬНО отправили
-                # email (OutboxMessage.status='sent') — это значит лид
-                # уже получил наше касание. Старые failed/rejected
-                # драфты (SMTP не сконфижен / Auditor отрезал) НЕ
-                # считаются реальным касанием — можно перепопробовать.
-                # Также skip если есть открытая (pending/running) задача
-                # first_touch — иначе dispatcher запустит Outreach дважды.
-                already_sent_subq = (
+                # Исключаем компании на которые AI уже потратил токены
+                # (есть OutboxMessage в любом статусе кроме 'rejected').
+                # Auditor.reject = AI не успел реально подумать или сделал
+                # шаблон → можно retry. Все остальные статусы (sent /
+                # holding / failed / cancelled) = AI потратил токены на
+                # анализ, повторять = жечь токены повторно.
+                already_drafted_subq = (
                     select(models.OutboxMessage.company_id)
-                    .where(models.OutboxMessage.status == models.OUTBOX_SENT)
+                    .where(models.OutboxMessage.status != models.OUTBOX_REJECTED)
                 )
                 in_flight_subq = (
                     select(models.AgentTask.company_id)
@@ -111,7 +114,7 @@ def tick() -> dict:
                         (models.Company.score.is_(None))
                         | (models.Company.score >= _settings.score_threshold)
                     )
-                    .filter(not_(models.Company.id.in_(already_sent_subq)))
+                    .filter(not_(models.Company.id.in_(already_drafted_subq)))
                     .filter(not_(models.Company.id.in_(in_flight_subq)))
                     .order_by(models.Company.score.desc())
                     .limit(quota_left)
