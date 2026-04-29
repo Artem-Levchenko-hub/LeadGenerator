@@ -83,6 +83,9 @@ def fetch_site(*, url: str) -> str:
         ]
     )
 
+    # Контакты — emails и telegram-handle для выбора канала Outreach Agent'ом.
+    contacts = _extract_contacts(resp.text or "", final_url)
+
     out = {
         "url": url,
         "final_url": final_url,
@@ -103,8 +106,81 @@ def fetch_site(*, url: str) -> str:
         "text_sample": text_sample,
         "server_header": resp.headers.get("server", ""),
         "x_powered_by": resp.headers.get("x-powered-by", ""),
+        "contacts": contacts,
     }
     return json.dumps(out, ensure_ascii=False)
+
+
+_EMAIL_RE = re.compile(
+    r"\b([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b"
+)
+_TG_LINK_RE = re.compile(r"(?:https?://)?t(?:elegram)?\.me/([A-Za-z0-9_+]{3,})", re.I)
+_TG_AT_RE = re.compile(r"(?<![A-Za-z0-9_])@([A-Za-z0-9_]{4,})")
+_VK_RE = re.compile(r"(?:https?://)?(?:m\.)?vk\.com/([A-Za-z0-9_.]{2,})", re.I)
+_WA_RE = re.compile(
+    r"(?:https?://)?(?:wa\.me|api\.whatsapp\.com/send)/?(?:\?phone=)?([+0-9]+)",
+    re.I,
+)
+
+
+def _extract_contacts(html_text: str, page_url: str) -> dict:
+    """Извлекает emails / telegram / vk / whatsapp с сайта компании.
+
+    Email'ы делятся на 'corporate' (на этом же домене или другом B2B-домене) и
+    'personal' (gmail/mail.ru/yandex/...). Outreach Agent выбирает channel
+    исходя из доступных корпоративных адресов.
+    """
+    from worker.auditor import is_personal_email, PERSONAL_EMAIL_DOMAINS
+
+    # Домен компании
+    site_host = urlparse(page_url).hostname or ""
+    site_host = site_host.lower().lstrip("www.")
+
+    emails = set(_EMAIL_RE.findall(html_text))
+    # Фильтруем технические/служебные (sentry, support@reportlab, etc. — обычно
+    # не наши, но мы не знаем — пусть LLM решает)
+    emails = {e for e in emails if not e.lower().endswith((".png", ".jpg", ".gif"))}
+
+    corp_emails: list[str] = []
+    own_domain_emails: list[str] = []
+    personal_emails: list[str] = []
+    for e in sorted(emails):
+        domain = e.rsplit("@", 1)[1].lower()
+        if is_personal_email(e):
+            personal_emails.append(e)
+        elif site_host and (domain == site_host or site_host.endswith("." + domain) or domain.endswith("." + site_host)):
+            own_domain_emails.append(e)
+            corp_emails.append(e)
+        else:
+            corp_emails.append(e)
+
+    tg_handles = set()
+    for m in _TG_LINK_RE.finditer(html_text):
+        h = m.group(1)
+        if h and h.lower() not in {"share", "iv", "joinchat"}:
+            tg_handles.add(h)
+    # @-mentions — берём осторожно (могут быть случайные слова в тексте);
+    # сохраняем только если рядом упоминается слово telegram/телеграм.
+    for m in _TG_AT_RE.finditer(html_text):
+        ctx_start = max(0, m.start() - 60)
+        ctx_end = min(len(html_text), m.end() + 60)
+        ctx = html_text[ctx_start:ctx_end].lower()
+        if "telegram" in ctx or "телеграм" in ctx or "t.me" in ctx:
+            tg_handles.add(m.group(1))
+
+    vk_handles = sorted({m.group(1) for m in _VK_RE.finditer(html_text)})
+    whatsapp = sorted({m.group(1) for m in _WA_RE.finditer(html_text)})
+
+    return {
+        "site_host": site_host,
+        "emails_corporate": corp_emails[:10],
+        "emails_on_own_domain": own_domain_emails[:10],
+        "emails_personal": personal_emails[:10],
+        "telegram": sorted(tg_handles)[:10],
+        "vk": vk_handles[:5],
+        "whatsapp": whatsapp[:5],
+        "any_b2b_email_found": bool(corp_emails),
+    }
 
 
 def _detect_cms(html_low: str, headers: dict) -> str:

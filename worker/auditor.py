@@ -28,6 +28,38 @@ PLACEHOLDER_PATTERNS = [
     re.compile(r"<<[^>]+>>"),                      # <<placeholder>>
 ]
 
+# Personal-email домены — на них холодный B2B-outreach НЕ идёт.
+# Это требование: связываться только по корпоративной почте (info@company.ru,
+# contact@example.com и т.п.), а не на личные ящики директоров/сотрудников.
+# Personal-адреса попадают в blacklist соображений 152-ФЗ (нет согласия на
+# холодную рассылку на личный email физлица).
+PERSONAL_EMAIL_DOMAINS = {
+    # Россия
+    "mail.ru", "list.ru", "bk.ru", "inbox.ru", "internet.ru",
+    "yandex.ru", "yandex.com", "yandex.by", "yandex.kz", "ya.ru",
+    "rambler.ru", "lenta.ru", "ro.ru", "rambler.ua",
+    # Глобальные публичные
+    "gmail.com", "googlemail.com",
+    "outlook.com", "hotmail.com", "live.com", "msn.com",
+    "yahoo.com", "yahoo.co.uk", "ymail.com", "rocketmail.com",
+    "icloud.com", "me.com", "mac.com",
+    "proton.me", "protonmail.com", "pm.me",
+    "aol.com", "gmx.com", "gmx.de", "gmx.net",
+    "fastmail.com", "tutanota.com", "tuta.io", "tutamail.com",
+    "qq.com", "163.com", "126.com", "sina.com", "sohu.com",
+    # СНГ публичные
+    "i.ua", "ukr.net", "meta.ua",
+    "tut.by", "mail.by",
+}
+
+
+def is_personal_email(address: str) -> bool:
+    """True если address на персональном домене (не B2B)."""
+    if not address or "@" not in address:
+        return False
+    domain = address.rsplit("@", 1)[1].lower().strip()
+    return domain in PERSONAL_EMAIL_DOMAINS
+
 INNERTALK_NAME = re.compile(r"\binnertalk\b", re.IGNORECASE)
 ENCRYPTION_TERMS = re.compile(
     r"(зашифр|шифров|шифр[^о]|encrypt|cipher|"
@@ -114,6 +146,20 @@ def audit(db: Session, message: models.OutboxMessage) -> AuditResult:
             return AuditResult.reject(
                 "opt_out_present",
                 "no opt-out instruction in body (152-ФЗ)",
+            )
+
+    # Rule 6.5: corporate_email_only — холодный email шлём ТОЛЬКО на B2B-адреса.
+    # Если адресат на gmail/mail.ru/yandex и т.п. — это личный ящик физлица,
+    # рассылать туда без согласия = нарушение 152-ФЗ.
+    # Исключение: если это reply в существующем conversation (человек сам нам
+    # написал, conversation_id задан) — можно отвечать куда угодно.
+    if message.channel == models.CHANNEL_EMAIL and not message.conversation_id:
+        if is_personal_email(message.to_address):
+            return AuditResult.reject(
+                "corporate_email_only",
+                f"cold outreach to personal email domain "
+                f"({(message.to_address or '').split('@')[-1]}) is forbidden "
+                "— use a corporate B2B address only",
             )
 
     # Rule 7: blacklist
