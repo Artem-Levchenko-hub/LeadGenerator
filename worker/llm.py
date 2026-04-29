@@ -283,6 +283,46 @@ def _system_blocks_to_str(system_blocks: list[dict]) -> str:
     return "\n\n".join(b.get("text", "") for b in system_blocks if b.get("text"))
 
 
+def _compact_old_tool_results(messages: list[dict], keep_recent_turns: int = 2) -> int:
+    """In-place: ужимает tool_result'ы из старых итераций до placeholder'а.
+
+    На итерации 8 ReAct loop'а в messages лежит ВСЯ история — каждый
+    `fetch_site` (~3-5k chars JSON) + каждый `record_weakness` (~200 chars) +
+    assistant-сообщения. Это превращает 1 LLM-вызов в payload по 30-50k
+    tokens.
+
+    Решение: оставляем последние `keep_recent_turns` ассистент-итераций
+    полными (там модель ссылается на свои недавние tool results), а
+    предыдущие tool-сообщения заменяем на короткий placeholder.
+
+    Не удаляет message'ы (нарушит соответствие tool_call_id ↔ tool reply).
+    Только обнуляет content до короткой пометки.
+
+    Returns: сколько символов сэкономили (для логирования).
+    """
+    asst_indices = [i for i, m in enumerate(messages) if m.get("role") == "assistant"]
+    if len(asst_indices) <= keep_recent_turns:
+        return 0
+    # cutoff — индекс ассистент-сообщения, начиная с которого хвост остаётся полным
+    cutoff = asst_indices[-keep_recent_turns]
+    saved = 0
+    # пропускаем индексы 0 (system) и 1 (user) — они нужны полностью
+    for i in range(2, cutoff):
+        m = messages[i]
+        role = m.get("role")
+        content = m.get("content") or ""
+        if role == "tool":
+            if isinstance(content, str) and len(content) > 150:
+                short = f"[prev tool_result, {len(content)} chars truncated]"
+                saved += len(content) - len(short)
+                m["content"] = short
+        elif role == "assistant" and isinstance(content, str) and len(content) > 200:
+            short = content[:150] + "... [trunc]"
+            saved += len(content) - len(short)
+            m["content"] = short
+    return saved
+
+
 def _run_openai(
     record: AgentRunRecord,
     system_blocks: list[dict],
@@ -319,7 +359,12 @@ def _run_openai(
         extra_headers["HTTP-Referer"] = "https://lead-generator.ru"
         extra_headers["X-Title"] = "Stenvik Agent Studio"
 
-    for _ in range(max_iterations):
+    for iter_idx in range(max_iterations):
+        # Перед каждым вызовом ужимаем старые tool_results — это срезает
+        # input_tokens на 50-70% к 5-й итерации и более.
+        saved = _compact_old_tool_results(messages, keep_recent_turns=2)
+        if saved > 1000:
+            log.info("llm: iter=%d compacted old tool_results, saved %d chars", iter_idx, saved)
         try:
             resp = client.chat.completions.create(
                 model=model,

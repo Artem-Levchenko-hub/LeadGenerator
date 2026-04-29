@@ -173,14 +173,17 @@ def _extract_contacts(html_text: str, page_url: str) -> dict:
     vk_handles = sorted({m.group(1) for m in _VK_RE.finditer(html_text)})
     whatsapp = sorted({m.group(1) for m in _WA_RE.finditer(html_text)})
 
+    # Лимиты были по 10 — давало 30+ email'ов в JSON ответа fetch_site и 4-5KB
+    # лишних chars × 8 итераций = огромный balas в context. 3 шт на категорию
+    # хватит — Outreach Agent выбирает лучший corp email + один альтернативный канал.
     return {
         "site_host": site_host,
-        "emails_corporate": corp_emails[:10],
-        "emails_on_own_domain": own_domain_emails[:10],
-        "emails_personal": personal_emails[:10],
-        "telegram": sorted(tg_handles)[:10],
-        "vk": vk_handles[:5],
-        "whatsapp": whatsapp[:5],
+        "emails_corporate": corp_emails[:3],
+        "emails_on_own_domain": own_domain_emails[:3],
+        "emails_personal": personal_emails[:3],
+        "telegram": sorted(tg_handles)[:3],
+        "vk": vk_handles[:2],
+        "whatsapp": whatsapp[:2],
         "any_b2b_email_found": bool(corp_emails),
     }
 
