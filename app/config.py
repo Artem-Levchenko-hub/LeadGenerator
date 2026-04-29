@@ -107,6 +107,13 @@ class Settings(BaseSettings):
     conversation_loop_guard_msgs: int = 5
     outreach_max_iterations: int = 30
 
+    # Если False — Tactical Orchestrator НЕ будет авто-enqueue'ить
+    # outreach.first_touch на новые prospects. Лиды просто копятся в БД,
+    # пользователь сам нажимает «Запустить Outreach» на /company/{id}
+    # когда хочет тратить токены на конкретный лид. Защищает от burn'а
+    # на лидах которые сейчас не в фокусе.
+    auto_outreach_enabled: bool = False
+
     tz: str = "Europe/Moscow"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")

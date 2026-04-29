@@ -61,26 +61,34 @@ def enqueue(
 
 def tick() -> dict:
     """Один тик оркестратора. Возвращает отчёт о созданных задачах."""
+    from app.config import settings as _settings
+
     enq_first = 0
     enq_cont = 0
+    auto_off = not _settings.auto_outreach_enabled
     with SessionLocal() as db:
         if kill_switch_active(db):
             return {"skipped": "kill_switch_active"}
 
         # 1) Companies без касаний → ставим outreach.first_touch
-        prospects = (
-            db.query(models.Company)
-            .filter(models.Company.stage == models.STAGE_PROSPECT)
-            .filter(models.Company.needs_human.is_(False))
-            .order_by(models.Company.created_at.asc())
-            .limit(20)
-            .all()
-        )
-        for c in prospects:
-            if has_open_task(db, models.TASK_OUTREACH_FIRST, c.id):
-                continue
-            enqueue(db, kind=models.TASK_OUTREACH_FIRST, company_id=c.id)
-            enq_first += 1
+        # ВАЖНО: только если AUTO_OUTREACH_ENABLED=true. Иначе лиды лежат в
+        # БД, ждут что пользователь зайдёт на /company/{id} и нажмёт
+        # «Запустить Outreach Agent» вручную. Это сохраняет LLM-токены —
+        # AI не дёргается на каждого нового prospect'а автоматически.
+        if not auto_off:
+            prospects = (
+                db.query(models.Company)
+                .filter(models.Company.stage == models.STAGE_PROSPECT)
+                .filter(models.Company.needs_human.is_(False))
+                .order_by(models.Company.created_at.asc())
+                .limit(20)
+                .all()
+            )
+            for c in prospects:
+                if has_open_task(db, models.TASK_OUTREACH_FIRST, c.id):
+                    continue
+                enqueue(db, kind=models.TASK_OUTREACH_FIRST, company_id=c.id)
+                enq_first += 1
 
         # 2) Новые входящие → outreach.continue
         # Идея: для каждого conversation, у которого last_inbound_at > last_outbound_at
