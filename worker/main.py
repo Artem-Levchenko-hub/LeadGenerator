@@ -68,10 +68,11 @@ def main() -> int:
         id="imap_poll", max_instances=1, coalesce=True,
     )
 
-    # Hunter: 2GIS — каждые 30 минут, до 5 новых лидов за тик.
+    # Hunter — каждые 20 минут, до 10 новых лидов за тик
+    # (≈30 тиков/день × 10 = 300 теоретических, реально с дедупом ≈100-150).
     sched.add_job(
-        lambda: _safe(lambda: hunter_main.run_one_tick(max_per_tick=5), "hunter.tick"),
-        CronTrigger.from_crontab("*/30 * * * *"),
+        lambda: _safe(lambda: hunter_main.run_one_tick(max_per_tick=10), "hunter.tick"),
+        CronTrigger.from_crontab("*/20 * * * *"),
         id="hunter_tick", max_instances=1, coalesce=True,
     )
 

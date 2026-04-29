@@ -47,28 +47,31 @@ class TwoGISSource(LeadSource):
         self.cities = cities or settings.twogis_cities_list
         self.categories = categories or settings.twogis_categories_list
 
-    def iter_leads(self, *, limit: int = 20) -> Iterator[LeadHit]:
+    def iter_leads(self, *, limit: int = 50) -> Iterator[LeadHit]:
         if not self.api_key:
             log.warning("2GIS api key not set, skipping")
             return
 
         emitted = 0
-        for category in self.categories:
-            for city in self.cities:
+        # Перебираем пары "round-robin": сначала по одной категории на каждый
+        # город, потом следующая. Это даёт более разнообразные лиды чем
+        # «все стоматологии Москвы → потом все Питера».
+        pairs = [(cat, city) for cat in self.categories for city in self.cities]
+        for category, city in pairs:
+            if emitted >= limit:
+                return
+            try:
+                items = self._search_page(category, city, page_size=50)
+            except Exception:  # noqa: BLE001
+                log.exception("2gis search failed for %s/%s", category, city)
+                continue
+            for item in items:
                 if emitted >= limit:
                     return
-                try:
-                    items = self._search_page(category, city, page_size=10)
-                except Exception:  # noqa: BLE001
-                    log.exception("2gis search failed for %s/%s", category, city)
-                    continue
-                for item in items:
-                    if emitted >= limit:
-                        return
-                    hit = self._item_to_hit(item, category, city)
-                    if hit:
-                        yield hit
-                        emitted += 1
+                hit = self._item_to_hit(item, category, city)
+                if hit:
+                    yield hit
+                    emitted += 1
 
     def _search_page(self, category: str, city: str, page_size: int) -> list[dict]:
         params = {

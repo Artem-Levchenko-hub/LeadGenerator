@@ -115,8 +115,12 @@ def get_active_sources() -> list[LeadSource]:
     s_2gis = TwoGISSource()
     if s_2gis.api_key and s_2gis.cities and s_2gis.categories:
         sources.append(s_2gis)
-    # HH employers — бесплатный нативный API, всегда активен.
-    sources.append(HHEmployersSource())
+    # HH employers — с 2024 требует OAuth (анонимный API возвращает 403).
+    # Подключаем только когда HH_OAUTH_TOKEN или HH_CLIENT_ID настроены.
+    # См. https://dev.hh.ru/admin для регистрации приложения.
+    import os
+    if os.environ.get("HH_OAUTH_TOKEN") or os.environ.get("hh_oauth_token"):
+        sources.append(HHEmployersSource())
     return sources
 
 
