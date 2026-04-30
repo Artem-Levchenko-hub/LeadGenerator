@@ -12,4 +12,11 @@ env/
 *.log
 data/*.db
 data/*.db-journal
+data/ceo_journal/
+data/covers/
 batch.json
+*.bak.*
+.env.bak.*
+
+WorksGrid.tsx
+rebrand_to_stenvik.sh
